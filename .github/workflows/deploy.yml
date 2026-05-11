@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PHP_VERSION: "8.2"
+  # 8.3 нужен для openspout/zipstream из composer.lock; на хостинге также должен стоять PHP >= 8.3.
+  PHP_VERSION: "8.3"
   NODE_VERSION: "20"
   # На обычном хостинге cli может быть `php`, `php82`, `php8.2`, `/usr/local/bin/php`.
   # При необходимости переопределить через секрет/variable HOSTING_PHP_BIN.
