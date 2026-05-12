@@ -26,8 +26,14 @@ class RolesAndPermissionsSeeder extends Seeder
             'news.preview',
         ];
 
+        $landingPermissions = [
+            'landing.read',
+            'landing.update',
+        ];
+
         $permissions = [
             ...$newsPermissions,
+            ...$landingPermissions,
             'users.directory',
             'users.manage',
         ];
@@ -39,6 +45,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $userRole = Role::findOrCreate('user', 'web');
         $userRole->syncPermissions([
             ...$newsPermissions,
+            ...$landingPermissions,
             'users.directory',
         ]);
 

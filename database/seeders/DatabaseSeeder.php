@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
             AdminUserSeeder::class,
             NewsSeeder::class,
+            LandingContentsSeeder::class,
+            LandingScenariosSeeder::class,
         ]);
     }
 }
