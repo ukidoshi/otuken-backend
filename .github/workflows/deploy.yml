@@ -138,6 +138,26 @@ jobs:
             -e "ssh -i ~/.ssh/id_deploy -p ${{ secrets.HOSTING_PORT }} -o StrictHostKeyChecking=yes" \
             ./ "${{ secrets.HOSTING_USERNAME }}@${{ secrets.HOSTING_HOST }}:${{ secrets.HOSTING_TARGET_PATH }}/"
 
+      - name: Discover PHP binaries on server
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${{ secrets.HOSTING_PORT }}" \
+            -o StrictHostKeyChecking=yes \
+            "${{ secrets.HOSTING_USERNAME }}@${{ secrets.HOSTING_HOST }}" \
+            'bash -lc "set +e
+              echo === type php84 ===; type php84
+              echo === alias php ===; alias 2>/dev/null | grep -i php
+              echo === which php* ===; which php php83 php84 php8.3 php8.4 2>/dev/null
+              echo === ls /usr/bin/php* ===; ls -la /usr/bin/php* 2>/dev/null
+              echo === ls /usr/local/bin/php* ===; ls -la /usr/local/bin/php* 2>/dev/null
+              echo === ls /usr/local/php*/bin/php ===; ls -la /usr/local/php*/bin/php 2>/dev/null
+              echo === ls /opt/php-*/bin/php ===; ls -la /opt/php-*/bin/php 2>/dev/null
+              echo === ls /opt/alt/php*/usr/bin/php ===; ls -la /opt/alt/php*/usr/bin/php 2>/dev/null
+              echo === ls /opt/cpanel/ea-php*/root/usr/bin/php ===; ls -la /opt/cpanel/ea-php*/root/usr/bin/php 2>/dev/null
+              echo === ls /opt/plesk/php/*/bin/php ===; ls -la /opt/plesk/php/*/bin/php 2>/dev/null
+              echo === find quick ===; find /usr/local /opt /usr/bin -maxdepth 6 -type f \( -name php -o -name php8.4 -o -name php84 \) 2>/dev/null | head -40
+              true
+            "'
+
       - name: Render post-deploy script
         env:
           REMOTE_TARGET: ${{ secrets.HOSTING_TARGET_PATH }}
