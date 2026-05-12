@@ -18,9 +18,10 @@ env:
   # 8.3 нужен для openspout/zipstream из composer.lock; на хостинге также должен стоять PHP >= 8.3.
   PHP_VERSION: "8.3"
   NODE_VERSION: "20"
-  # На обычном хостинге cli может быть `php`, `php82`, `php8.2`, `/usr/local/bin/php`.
-  # При необходимости переопределить через секрет/variable HOSTING_PHP_BIN.
-  REMOTE_PHP_BIN: ${{ vars.HOSTING_PHP_BIN || 'php' }}
+  # На текущем хостинге системный `php` = 8.2 (несовместим с зависимостями), 8.4 доступна как `php84`.
+  # Если поменяется бинарь — переопределите через GitHub Variable HOSTING_PHP_BIN (без фоллбэка ниже),
+  # или просто отредактируйте дефолт здесь.
+  REMOTE_PHP_BIN: ${{ vars.HOSTING_PHP_BIN || secrets.HOSTING_PHP_BIN || 'php84' }}
 
 jobs:
   deploy:
@@ -149,6 +150,17 @@ jobs:
           cd "${{ secrets.HOSTING_TARGET_PATH }}"
 
           PHP="${{ env.REMOTE_PHP_BIN }}"
+
+          # Если бинарь не найден в PATH — попробовать самые частые варианты.
+          if ! command -v "\$PHP" >/dev/null 2>&1; then
+            for cand in php84 php83 php8.4 php8.3 /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php /usr/local/bin/php8.4 /usr/local/bin/php8.3; do
+              if command -v "\$cand" >/dev/null 2>&1; then PHP="\$cand"; break; fi
+            done
+          fi
+
+          echo "Using PHP: \$PHP"
+          \$PHP -v
+          \$PHP -r 'echo PHP_BINARY, PHP_EOL;'
 
           if [ ! -f .env ]; then
             echo ".env отсутствует на сервере. Залейте .env вручную и перезапустите деплой." >&2
