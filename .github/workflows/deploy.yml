@@ -18,10 +18,10 @@ env:
   # 8.3 нужен для openspout/zipstream из composer.lock; на хостинге также должен стоять PHP >= 8.3.
   PHP_VERSION: "8.3"
   NODE_VERSION: "20"
-  # На текущем хостинге системный `php` = 8.2 (несовместим с зависимостями), 8.4 доступна как `php84`.
-  # Если поменяется бинарь — переопределите через GitHub Variable HOSTING_PHP_BIN (без фоллбэка ниже),
-  # или просто отредактируйте дефолт здесь.
-  REMOTE_PHP_BIN: ${{ vars.HOSTING_PHP_BIN || secrets.HOSTING_PHP_BIN || 'php84' }}
+  # На текущем хостинге системный `php` = 8.2, нужная версия доступна как `php84`.
+  # Можно переопределить через GitHub *Variable* (Settings → Variables) HOSTING_PHP_BIN.
+  # Не используйте Secret — иначе значение маскируется как *** в логах и SSH-команда падает.
+  REMOTE_PHP_BIN: ${{ vars.HOSTING_PHP_BIN || 'php84' }}
 
 jobs:
   deploy:
@@ -149,16 +149,40 @@ jobs:
           set -euo pipefail
           cd "${{ secrets.HOSTING_TARGET_PATH }}"
 
+          # Non-interactive SSH часто не подхватывает .bashrc / PATH хостинга.
+          [ -f /etc/profile ] && . /etc/profile 2>/dev/null || true
+          [ -f "\$HOME/.bash_profile" ] && . "\$HOME/.bash_profile" 2>/dev/null || true
+          [ -f "\$HOME/.profile" ] && . "\$HOME/.profile" 2>/dev/null || true
+          [ -f "\$HOME/.bashrc" ] && . "\$HOME/.bashrc" 2>/dev/null || true
+
+          # Допишем популярные пути к PHP на shared-хостингах.
+          export PATH="\$HOME/bin:/usr/local/bin:/usr/bin:/bin:/opt/alt/php84/usr/bin:/opt/alt/php83/usr/bin:/opt/php-8.4/bin:/opt/php-8.3/bin:/opt/cpanel/ea-php84/root/usr/bin:/opt/cpanel/ea-php83/root/usr/bin:\$PATH"
+
           PHP="${{ env.REMOTE_PHP_BIN }}"
 
           # Если бинарь не найден в PATH — попробовать самые частые варианты.
-          if ! command -v "\$PHP" >/dev/null 2>&1; then
-            for cand in php84 php83 php8.4 php8.3 /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php /usr/local/bin/php8.4 /usr/local/bin/php8.3; do
-              if command -v "\$cand" >/dev/null 2>&1; then PHP="\$cand"; break; fi
+          resolve_php() {
+            for cand in "\$@"; do
+              if command -v "\$cand" >/dev/null 2>&1; then echo "\$cand"; return 0; fi
             done
+            return 1
+          }
+
+          if ! command -v "\$PHP" >/dev/null 2>&1; then
+            FOUND="\$(resolve_php php84 php83 php8.4 php8.3 \\
+              /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php \\
+              /opt/php-8.4/bin/php /opt/php-8.3/bin/php \\
+              /opt/cpanel/ea-php84/root/usr/bin/php /opt/cpanel/ea-php83/root/usr/bin/php \\
+              /usr/local/bin/php8.4 /usr/local/bin/php8.3)" || true
+            if [ -n "\${FOUND:-}" ]; then PHP="\$FOUND"; fi
           fi
 
           echo "Using PHP: \$PHP"
+          if ! command -v "\$PHP" >/dev/null 2>&1; then
+            echo "PHP бинарь '\$PHP' не найден на сервере. Найдите путь интерактивно (which php84) и задайте Variable HOSTING_PHP_BIN." >&2
+            echo "PATH=\$PATH" >&2
+            exit 127
+          fi
           \$PHP -v
           \$PHP -r 'echo PHP_BINARY, PHP_EOL;'
 
