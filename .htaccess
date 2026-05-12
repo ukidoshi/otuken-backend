@@ -1,0 +1,33 @@
+# Корневой .htaccess для shared-хостинга (Apache / LiteSpeed),
+# где document_root указывает на корень проекта, а не на public/.
+# Перенаправляет все запросы внутрь public/, чтобы Laravel-фронтконтроллер
+# (public/index.php + public/.htaccess) обрабатывал маршруты, включая /admin.
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Не подставлять public/ повторно, если запрос уже идёт в /public/...
+    RewriteCond %{REQUEST_URI} !^/public/
+
+    # Всё остальное переписываем в public/ с сохранением query string.
+    RewriteRule ^(.*)$ public/$1 [L,QSA]
+</IfModule>
+
+# Запрет прямого доступа к служебным файлам/каталогам в корне проекта
+# (на случай если кто-то полезет напрямую, минуя rewrite).
+<FilesMatch "^(\.env(\..*)?|composer\.(json|lock)|package(-lock)?\.json|artisan|\.gitignore|\.gitattributes|README\.md)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_alias.c>
+    RedirectMatch 404 /\.git
+    RedirectMatch 404 /storage/logs
+    RedirectMatch 404 /storage/framework
+    RedirectMatch 404 /bootstrap/cache
+</IfModule>
