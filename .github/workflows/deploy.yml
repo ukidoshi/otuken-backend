@@ -190,13 +190,15 @@ jobs:
             load_profile "$HOME/.bashrc"
           fi
 
-          export PATH="${HOME:-/root}/bin:/usr/local/bin:/usr/bin:/bin:/opt/alt/php84/usr/bin:/opt/alt/php83/usr/bin:/opt/php-8.4/bin:/opt/php-8.3/bin:/opt/cpanel/ea-php84/root/usr/bin:/opt/cpanel/ea-php83/root/usr/bin:${PATH:-}"
+          export PATH="${HOME:-/root}/bin:/usr/local/bin:/usr/bin:/bin:/opt/php/8.4/bin:/opt/php/8.3/bin:/opt/alt/php84/usr/bin:/opt/alt/php83/usr/bin:/opt/php-8.4/bin:/opt/php-8.3/bin:/opt/cpanel/ea-php84/root/usr/bin:/opt/cpanel/ea-php83/root/usr/bin:${PATH:-}"
 
           cd "$REMOTE_TARGET" || { echo "cd failed: $REMOTE_TARGET" >&2; exit 2; }
 
           PHP="$REMOTE_PHP"
           if ! command -v "$PHP" >/dev/null 2>&1; then
-            for cand in php84 php83 php8.4 php8.3 \
+            for cand in \
+              /opt/php/8.4/bin/php /opt/php/8.3/bin/php \
+              php84 php83 php8.4 php8.3 \
               /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php \
               /opt/php-8.4/bin/php /opt/php-8.3/bin/php \
               /opt/cpanel/ea-php84/root/usr/bin/php /opt/cpanel/ea-php83/root/usr/bin/php \
