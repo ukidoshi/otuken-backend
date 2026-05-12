@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\News;
 use App\Services\AiTranslationService;
+use App\Services\Media\EditorJsMediaMetadata;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,7 +43,12 @@ class NewsStudioController extends Controller
             'content' => ['required', 'array'],
         ]);
 
-        $news->setTranslation('content_blocks', $validated['locale'], $validated['content']);
+        $content = $validated['content'];
+        if (is_array($content)) {
+            $content = app(EditorJsMediaMetadata::class)->enrichContent($content);
+        }
+
+        $news->setTranslation('content_blocks', $validated['locale'], $content);
         $news->save();
 
         return response()->json([
@@ -59,16 +65,28 @@ class NewsStudioController extends Controller
         ]);
 
         $path = $validated['image']->store('news-studio', 'public');
+        $url = '/storage/'.$path;
+
+        $file = ['url' => $url];
+        $abs = Storage::disk('public')->path($path);
+        $info = @getimagesize($abs);
+        if (is_array($info)) {
+            $file['width'] = (int) $info[0];
+            $file['height'] = (int) $info[1];
+            if (isset($info['mime'])) {
+                $file['mime'] = (string) $info['mime'];
+            }
+        }
+        $file['mime'] ??= $validated['image']->getMimeType() ?: 'application/octet-stream';
+        $file['size'] = (int) $validated['image']->getSize();
 
         return response()->json([
             'success' => 1,
-            'file' => [
-                'url' => '/storage/'.$path,
-            ],
+            'file' => $file,
         ]);
     }
 
-    public function uploadVideo(Request $request, News $news): JsonResponse
+    public function uploadVideo(Request $request, News $news, EditorJsMediaMetadata $metadata): JsonResponse
     {
         $this->authorize('update', $news);
 
@@ -82,12 +100,19 @@ class NewsStudioController extends Controller
         ]);
 
         $path = $validated['video']->store('news-studio', 'public');
+        $url = '/storage/'.$path;
+
+        $block = $metadata->enrichBlocks([
+            ['type' => 'video', 'data' => ['file' => ['url' => $url]]],
+        ])[0] ?? null;
+
+        $file = is_array($block['data']['file'] ?? null) ? $block['data']['file'] : ['url' => $url];
+        $file['mime'] ??= $validated['video']->getMimeType() ?: 'application/octet-stream';
+        $file['size'] = (int) $validated['video']->getSize();
 
         return response()->json([
             'success' => 1,
-            'file' => [
-                'url' => '/storage/'.$path,
-            ],
+            'file' => $file,
         ]);
     }
 
@@ -385,7 +410,11 @@ class NewsStudioController extends Controller
                     $normalized[] = [
                         'type' => 'image',
                         'data' => [
-                            'file' => ['url' => $url],
+                            'file' => $this->keepFileMeta(
+                                is_array($data['file'] ?? null) ? $data['file'] : [],
+                                $url,
+                                ['width', 'height', 'mime', 'size'],
+                            ),
                             'caption' => trim((string) ($data['caption'] ?? '')),
                         ],
                     ];
@@ -399,7 +428,11 @@ class NewsStudioController extends Controller
                     $normalized[] = [
                         'type' => 'video',
                         'data' => [
-                            'file' => ['url' => $videoUrl],
+                            'file' => $this->keepFileMeta(
+                                is_array($data['file'] ?? null) ? $data['file'] : [],
+                                $videoUrl,
+                                ['width', 'height', 'mime', 'size', 'duration', 'poster_url'],
+                            ),
                             'caption' => trim((string) ($data['caption'] ?? '')),
                             'withBorder' => (bool) ($data['withBorder'] ?? false),
                             'withBackground' => (bool) ($data['withBackground'] ?? false),
@@ -409,7 +442,7 @@ class NewsStudioController extends Controller
                     break;
 
                 case 'delimiter':
-                    $normalized[] = ['type' => 'delimiter', 'data' => new \stdClass()];
+                    $normalized[] = ['type' => 'delimiter', 'data' => new \stdClass];
                     break;
 
                 case 'embed':
@@ -432,5 +465,36 @@ class NewsStudioController extends Controller
 
         return $normalized;
     }
-}
 
+    /**
+     * Сохраняет известные метаполя файла (width/height/mime/size/duration/poster_url),
+     * приводя структуру file к виду {url, ...meta}.
+     *
+     * @param  array<string, mixed>  $file
+     * @param  array<int, string>  $allowedMetaKeys
+     * @return array<string, mixed>
+     */
+    private function keepFileMeta(array $file, string $url, array $allowedMetaKeys): array
+    {
+        $result = ['url' => $url];
+
+        foreach ($allowedMetaKeys as $key) {
+            if (! array_key_exists($key, $file)) {
+                continue;
+            }
+
+            $value = $file[$key];
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $result[$key] = match ($key) {
+                'width', 'height', 'size' => (int) $value,
+                'duration' => round((float) $value, 2),
+                default => (string) $value,
+            };
+        }
+
+        return $result;
+    }
+}

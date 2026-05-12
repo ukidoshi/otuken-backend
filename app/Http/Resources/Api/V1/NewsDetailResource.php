@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Api\V1;
 
 use App\Http\Support\NewsApiLocale;
+use App\Services\Media\EditorJsMediaMetadata;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,11 +15,16 @@ class NewsDetailResource extends JsonResource
         $cover = $this->getFirstMedia('cover_image');
         $seo = $this->getFirstMedia('seo_image');
 
+        $blocks = $this->getTranslation('content_blocks', $locale, true);
+        if (is_array($blocks)) {
+            $blocks = app(EditorJsMediaMetadata::class)->enrichContent($blocks);
+        }
+
         return [
             'title' => $this->getTranslation('title', $locale, true),
             'slug' => $this->slug,
             'excerpt' => $this->getTranslation('excerpt', $locale, true),
-            'content_blocks' => $this->getTranslation('content_blocks', $locale, true),
+            'content_blocks' => $blocks,
             'actuality_highlight' => (bool) $this->is_actuality_highlight,
             'cover_url' => $cover?->getUrl('webp-1400') ?? $cover?->getUrl(),
             'cover_alt' => $cover?->getCustomProperty('alt'),
