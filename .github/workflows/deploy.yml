@@ -155,6 +155,18 @@ jobs:
             exit 1
           fi
 
+          # Без этих папок Laravel падает на "Please provide a valid cache path".
+          mkdir -p \\
+            storage/app/public \\
+            storage/app/private \\
+            storage/framework/cache/data \\
+            storage/framework/sessions \\
+            storage/framework/views \\
+            storage/framework/testing \\
+            storage/logs \\
+            bootstrap/cache
+          chmod -R u+rwX storage bootstrap/cache 2>/dev/null || true
+
           # Symlink storage → public/storage. На shared-хостинге может уже быть.
           \$PHP artisan storage:link 2>/dev/null || true
 
