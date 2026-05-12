@@ -9,6 +9,14 @@ on:
         description: "Запустить миграции (php artisan migrate --force)"
         required: false
         default: "true"
+      run_media_backfill:
+        description: "Прогнать news:media:backfill (метаданные image/video, постеры)"
+        required: false
+        default: "false"
+      regenerate_posters:
+        description: "Пересоздать постеры при backfill (--regenerate-posters)"
+        required: false
+        default: "false"
 
 concurrency:
   group: deploy-hosting
@@ -163,6 +171,9 @@ jobs:
           REMOTE_TARGET: ${{ secrets.HOSTING_TARGET_PATH }}
           REMOTE_PHP: ${{ env.REMOTE_PHP_BIN }}
           RUN_MIGRATIONS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_migrations || 'true' }}
+          # backfill включается: чекбоксом в Run workflow или меткой [backfill] в commit message
+          RUN_MEDIA_BACKFILL: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.run_media_backfill == 'true') || contains(github.event.head_commit.message, '[backfill]') }}
+          REGENERATE_POSTERS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.regenerate_posters == 'true' }}
         run: |
           cat > /tmp/post-deploy.sh <<'SCRIPT'
           #!/usr/bin/env bash
@@ -172,6 +183,8 @@ jobs:
           : "${REMOTE_TARGET:?REMOTE_TARGET must be set}"
           : "${REMOTE_PHP:?REMOTE_PHP must be set}"
           : "${RUN_MIGRATIONS:=true}"
+          : "${RUN_MEDIA_BACKFILL:=false}"
+          : "${REGENERATE_POSTERS:=false}"
 
           # Подгрузка профилей хостинга. Делаем это аккуратно: -u временно выключаем,
           # источник ошибок не должен валить весь деплой.
@@ -248,6 +261,33 @@ jobs:
 
           "$PHP" artisan queue:restart 2>/dev/null || true
 
+          # Диагностика ffmpeg/ffprobe (нужны для генерации poster_url и размеров видео)
+          echo "--- media tooling ---"
+          if command -v ffprobe >/dev/null 2>&1; then
+            echo "ffprobe: $(command -v ffprobe)"
+            ffprobe -version 2>/dev/null | head -1 || true
+          else
+            echo "ffprobe: NOT FOUND (видео width/height/duration не подтянутся)"
+          fi
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "ffmpeg:  $(command -v ffmpeg)"
+            ffmpeg -version 2>/dev/null | head -1 || true
+          else
+            echo "ffmpeg:  NOT FOUND (poster_url у новых видео генериться не будет)"
+          fi
+          echo "---------------------"
+
+          # Опциональный backfill метаданных image/video в content_blocks
+          if [ "$RUN_MEDIA_BACKFILL" = "true" ]; then
+            echo "--- news:media:backfill ---"
+            BACKFILL_ARGS=""
+            if [ "$REGENERATE_POSTERS" = "true" ]; then
+              BACKFILL_ARGS="--regenerate-posters"
+            fi
+            "$PHP" artisan news:media:backfill $BACKFILL_ARGS || true
+            echo "---------------------------"
+          fi
+
           echo "Deploy finished at $(date -Is 2>/dev/null || date)"
           SCRIPT
           chmod +x /tmp/post-deploy.sh
@@ -264,11 +304,13 @@ jobs:
           REMOTE_TARGET: ${{ secrets.HOSTING_TARGET_PATH }}
           REMOTE_PHP: ${{ env.REMOTE_PHP_BIN }}
           RUN_MIGRATIONS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_migrations || 'true' }}
+          RUN_MEDIA_BACKFILL: ${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.run_media_backfill == 'true') || contains(github.event.head_commit.message, '[backfill]') }}
+          REGENERATE_POSTERS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.regenerate_posters == 'true' }}
         run: |
           ssh -i ~/.ssh/id_deploy -p "${{ secrets.HOSTING_PORT }}" \
             -o StrictHostKeyChecking=yes \
             "${{ secrets.HOSTING_USERNAME }}@${{ secrets.HOSTING_HOST }}" \
-            "REMOTE_TARGET='${REMOTE_TARGET}' REMOTE_PHP='${REMOTE_PHP}' RUN_MIGRATIONS='${RUN_MIGRATIONS}' bash /tmp/otuken-post-deploy.sh"
+            "REMOTE_TARGET='${REMOTE_TARGET}' REMOTE_PHP='${REMOTE_PHP}' RUN_MIGRATIONS='${RUN_MIGRATIONS}' RUN_MEDIA_BACKFILL='${RUN_MEDIA_BACKFILL}' REGENERATE_POSTERS='${REGENERATE_POSTERS}' bash /tmp/otuken-post-deploy.sh"
 
       - name: Cleanup SSH key
         if: always()

@@ -1,0 +1,38 @@
+# Конфигурация раздачи статики /storage/* для Apache / LiteSpeed на shared-хостинге.
+# nginx этот файл игнорирует — но многие российские хостинги используют Apache/LiteSpeed
+# поверх или вместо nginx, поэтому файл лишним не будет.
+
+# Поддержка Range-запросов (нужна для перемотки видео <video>).
+<IfModule mod_headers.c>
+    Header set Accept-Ranges "bytes"
+</IfModule>
+
+# Долгий immutable-кэш для загруженных медиа (имена файлов уникальны).
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/png  "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/avif "access plus 30 days"
+    ExpiresByType video/mp4  "access plus 30 days"
+    ExpiresByType video/webm "access plus 30 days"
+</IfModule>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpg|jpeg|png|webp|avif|gif|svg|mp4|webm|ogv|mov)$">
+        Header set Cache-Control "public, max-age=2592000, immutable"
+        Header set Access-Control-Allow-Origin "*"
+        Header set Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+    </FilesMatch>
+</IfModule>
+
+# В этой папке ни в коем случае не должен выполняться PHP.
+<FilesMatch "\.(php|phtml|phar)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
