@@ -138,95 +138,106 @@ jobs:
             -e "ssh -i ~/.ssh/id_deploy -p ${{ secrets.HOSTING_PORT }} -o StrictHostKeyChecking=yes" \
             ./ "${{ secrets.HOSTING_USERNAME }}@${{ secrets.HOSTING_HOST }}:${{ secrets.HOSTING_TARGET_PATH }}/"
 
-      - name: Post-deploy artisan commands
+      - name: Render post-deploy script
         env:
+          REMOTE_TARGET: ${{ secrets.HOSTING_TARGET_PATH }}
+          REMOTE_PHP: ${{ env.REMOTE_PHP_BIN }}
           RUN_MIGRATIONS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_migrations || 'true' }}
         run: |
-          ssh -i ~/.ssh/id_deploy -p "${{ secrets.HOSTING_PORT }}" \
-            -o StrictHostKeyChecking=yes \
-            "${{ secrets.HOSTING_USERNAME }}@${{ secrets.HOSTING_HOST }}" \
-            bash -se <<EOF
-          set -euo pipefail
-          cd "${{ secrets.HOSTING_TARGET_PATH }}"
+          cat > /tmp/post-deploy.sh <<'SCRIPT'
+          #!/usr/bin/env bash
+          set -uo pipefail
+          set -x
 
-          # Non-interactive SSH часто не подхватывает .bashrc / PATH хостинга.
+          : "${REMOTE_TARGET:?REMOTE_TARGET must be set}"
+          : "${REMOTE_PHP:?REMOTE_PHP must be set}"
+          : "${RUN_MIGRATIONS:=true}"
+
+          # Подгрузка профилей: PATH хостинга часто там
           [ -f /etc/profile ] && . /etc/profile 2>/dev/null || true
-          [ -f "\$HOME/.bash_profile" ] && . "\$HOME/.bash_profile" 2>/dev/null || true
-          [ -f "\$HOME/.profile" ] && . "\$HOME/.profile" 2>/dev/null || true
-          [ -f "\$HOME/.bashrc" ] && . "\$HOME/.bashrc" 2>/dev/null || true
-
-          # Допишем популярные пути к PHP на shared-хостингах.
-          export PATH="\$HOME/bin:/usr/local/bin:/usr/bin:/bin:/opt/alt/php84/usr/bin:/opt/alt/php83/usr/bin:/opt/php-8.4/bin:/opt/php-8.3/bin:/opt/cpanel/ea-php84/root/usr/bin:/opt/cpanel/ea-php83/root/usr/bin:\$PATH"
-
-          PHP="${{ env.REMOTE_PHP_BIN }}"
-
-          # Если бинарь не найден в PATH — попробовать самые частые варианты.
-          resolve_php() {
-            for cand in "\$@"; do
-              if command -v "\$cand" >/dev/null 2>&1; then echo "\$cand"; return 0; fi
-            done
-            return 1
-          }
-
-          if ! command -v "\$PHP" >/dev/null 2>&1; then
-            FOUND="\$(resolve_php php84 php83 php8.4 php8.3 \\
-              /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php \\
-              /opt/php-8.4/bin/php /opt/php-8.3/bin/php \\
-              /opt/cpanel/ea-php84/root/usr/bin/php /opt/cpanel/ea-php83/root/usr/bin/php \\
-              /usr/local/bin/php8.4 /usr/local/bin/php8.3)" || true
-            if [ -n "\${FOUND:-}" ]; then PHP="\$FOUND"; fi
+          if [ -n "${HOME:-}" ]; then
+            [ -f "$HOME/.bash_profile" ] && . "$HOME/.bash_profile" 2>/dev/null || true
+            [ -f "$HOME/.profile"      ] && . "$HOME/.profile"      2>/dev/null || true
+            [ -f "$HOME/.bashrc"       ] && . "$HOME/.bashrc"       2>/dev/null || true
           fi
 
-          echo "Using PHP: \$PHP"
-          if ! command -v "\$PHP" >/dev/null 2>&1; then
-            echo "PHP бинарь '\$PHP' не найден на сервере. Найдите путь интерактивно (which php84) и задайте Variable HOSTING_PHP_BIN." >&2
-            echo "PATH=\$PATH" >&2
+          export PATH="${HOME:-/root}/bin:/usr/local/bin:/usr/bin:/bin:/opt/alt/php84/usr/bin:/opt/alt/php83/usr/bin:/opt/php-8.4/bin:/opt/php-8.3/bin:/opt/cpanel/ea-php84/root/usr/bin:/opt/cpanel/ea-php83/root/usr/bin:${PATH:-}"
+
+          cd "$REMOTE_TARGET" || { echo "cd failed: $REMOTE_TARGET" >&2; exit 2; }
+
+          PHP="$REMOTE_PHP"
+          if ! command -v "$PHP" >/dev/null 2>&1; then
+            for cand in php84 php83 php8.4 php8.3 \
+              /opt/alt/php84/usr/bin/php /opt/alt/php83/usr/bin/php \
+              /opt/php-8.4/bin/php /opt/php-8.3/bin/php \
+              /opt/cpanel/ea-php84/root/usr/bin/php /opt/cpanel/ea-php83/root/usr/bin/php \
+              /usr/local/bin/php8.4 /usr/local/bin/php8.3; do
+              if command -v "$cand" >/dev/null 2>&1; then PHP="$cand"; break; fi
+            done
+          fi
+
+          echo "Using PHP: $PHP"
+          if ! command -v "$PHP" >/dev/null 2>&1; then
+            echo "PHP не найден. PATH=$PATH" >&2
             exit 127
           fi
-          \$PHP -v
-          \$PHP -r 'echo PHP_BINARY, PHP_EOL;'
+          "$PHP" -v
+          "$PHP" -r 'echo PHP_BINARY, PHP_EOL;'
 
           if [ ! -f .env ]; then
             echo ".env отсутствует на сервере. Залейте .env вручную и перезапустите деплой." >&2
             exit 1
           fi
 
-          # Без этих папок Laravel падает на "Please provide a valid cache path".
-          mkdir -p \\
-            storage/app/public \\
-            storage/app/private \\
-            storage/framework/cache/data \\
-            storage/framework/sessions \\
-            storage/framework/views \\
-            storage/framework/testing \\
-            storage/logs \\
+          mkdir -p \
+            storage/app/public \
+            storage/app/private \
+            storage/framework/cache/data \
+            storage/framework/sessions \
+            storage/framework/views \
+            storage/framework/testing \
+            storage/logs \
             bootstrap/cache
           chmod -R u+rwX storage bootstrap/cache 2>/dev/null || true
 
-          # Symlink storage → public/storage. На shared-хостинге может уже быть.
-          \$PHP artisan storage:link 2>/dev/null || true
+          "$PHP" artisan storage:link 2>/dev/null || true
+          "$PHP" artisan optimize:clear || true
 
-          # Сброс старых кэшей перед пересборкой
-          \$PHP artisan optimize:clear || true
-
-          if [ "${RUN_MIGRATIONS}" = "true" ]; then
-            \$PHP artisan migrate --force --no-interaction
+          if [ "$RUN_MIGRATIONS" = "true" ]; then
+            "$PHP" artisan migrate --force --no-interaction
           fi
 
-          \$PHP artisan config:cache
-          \$PHP artisan route:cache
-          \$PHP artisan view:cache
-          \$PHP artisan event:cache 2>/dev/null || true
+          "$PHP" artisan config:cache
+          "$PHP" artisan route:cache
+          "$PHP" artisan view:cache
+          "$PHP" artisan event:cache 2>/dev/null || true
 
-          # Filament
-          \$PHP artisan filament:optimize 2>/dev/null || true
-          \$PHP artisan icons:cache 2>/dev/null || true
+          "$PHP" artisan filament:optimize 2>/dev/null || true
+          "$PHP" artisan icons:cache 2>/dev/null || true
 
-          # Перезапуск воркеров, если используется queue
-          \$PHP artisan queue:restart 2>/dev/null || true
+          "$PHP" artisan queue:restart 2>/dev/null || true
 
-          echo "Deploy finished at \$(date -Is)"
-          EOF
+          echo "Deploy finished at $(date -Is 2>/dev/null || date)"
+          SCRIPT
+          chmod +x /tmp/post-deploy.sh
+
+      - name: Upload post-deploy script
+        run: |
+          scp -i ~/.ssh/id_deploy -P "${{ secrets.HOSTING_PORT }}" \
+            -o StrictHostKeyChecking=yes \
+            /tmp/post-deploy.sh \
+            "${{ secrets.HOSTING_USERNAME }}@${{ secrets.HOSTING_HOST }}:/tmp/otuken-post-deploy.sh"
+
+      - name: Run post-deploy script
+        env:
+          REMOTE_TARGET: ${{ secrets.HOSTING_TARGET_PATH }}
+          REMOTE_PHP: ${{ env.REMOTE_PHP_BIN }}
+          RUN_MIGRATIONS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_migrations || 'true' }}
+        run: |
+          ssh -i ~/.ssh/id_deploy -p "${{ secrets.HOSTING_PORT }}" \
+            -o StrictHostKeyChecking=yes \
+            "${{ secrets.HOSTING_USERNAME }}@${{ secrets.HOSTING_HOST }}" \
+            "REMOTE_TARGET='${REMOTE_TARGET}' REMOTE_PHP='${REMOTE_PHP}' RUN_MIGRATIONS='${RUN_MIGRATIONS}' bash /tmp/otuken-post-deploy.sh"
 
       - name: Cleanup SSH key
         if: always()
