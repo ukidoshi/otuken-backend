@@ -252,9 +252,13 @@ jobs:
           fi
 
           "$PHP" artisan config:cache
-          "$PHP" artisan route:cache
           "$PHP" artisan view:cache
           "$PHP" artisan event:cache 2>/dev/null || true
+
+          # route:cache намеренно не делаем: Filament v4 + Livewire регистрируют часть
+          # маршрутов лениво (через panel discovery), и кеш роутов может не содержать /admin/*.
+          # Сбрасываем старый кеш роутов на всякий случай.
+          "$PHP" artisan route:clear || true
 
           "$PHP" artisan filament:optimize 2>/dev/null || true
           "$PHP" artisan icons:cache 2>/dev/null || true
