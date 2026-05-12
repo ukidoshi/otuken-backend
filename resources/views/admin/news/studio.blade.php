@@ -127,6 +127,39 @@
             color: #6b7280;
         }
 
+        /* Overlay для удаления блока видео: появляется при hover/focus */
+        #editorjs .video-tool {
+            position: relative;
+        }
+        #editorjs .studio-block-delete-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(220, 38, 38, 0.92);
+            color: #fff;
+            border-radius: 50%;
+            border: 0;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            opacity: 0;
+            transition: opacity 120ms ease;
+            z-index: 5;
+            padding: 0;
+        }
+        #editorjs .video-tool:hover .studio-block-delete-btn,
+        #editorjs .video-tool:focus-within .studio-block-delete-btn,
+        #editorjs .studio-block-delete-btn:focus {
+            opacity: 1;
+        }
+        #editorjs .studio-block-delete-btn:hover {
+            background: #b91c1c;
+        }
+
         /* Editor.js native-like theme */
         #editorjs {
             position: relative;
@@ -326,7 +359,54 @@
     const embedToolboxIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill="currentColor" d="M8 5v14l11-7L8 5z"/></svg>';
     const videoToolboxIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path fill="currentColor" d="M4 6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2.5l4 2.5V6l-4 2.5V6a2 2 0 0 0-2-2H4zm0 2h12v8H4V8zm14 1.2v5.6L21 14V10l-3 1.2z"/></svg>';
     const imageTool = window.ImageTool || window.EditorjsImage;
-    const videoTool = window.VideoTool;
+    const rawVideoTool = window.VideoTool;
+
+    /**
+     * У плагина @weekwood/editorjs-video нет своей кнопки удаления блока.
+     * Родная «корзина» в Block Tunes (≡ слева) перекрывается контролами <video>,
+     * поэтому добавляем явную кнопку «Удалить» в попап настроек видео-блока.
+     */
+    const videoTool = (() => {
+        if (!rawVideoTool) return null;
+
+        return class VideoToolWithDelete extends rawVideoTool {
+            constructor(opts) {
+                super(opts);
+                if (!this.api && opts && opts.api) {
+                    this.api = opts.api;
+                }
+            }
+
+            renderSettings() {
+                const wrapper = super.renderSettings();
+                if (!(wrapper instanceof HTMLElement)) return wrapper;
+
+                const btn = document.createElement('div');
+                btn.classList.add('cdx-settings-button');
+                btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:6px;cursor:pointer;color:#dc2626;background:rgba(220,38,38,0.08);margin-top:4px;';
+                btn.title = 'Удалить блок видео';
+                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>';
+                btn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    if (!window.confirm('Удалить блок видео?')) return;
+                    try {
+                        this.api.blocks.delete();
+                    } catch (e) {
+                        console.warn('blocks.delete() failed, fallback', e);
+                        const idx = this.api && this.api.blocks && this.api.blocks.getCurrentBlockIndex
+                            ? this.api.blocks.getCurrentBlockIndex()
+                            : -1;
+                        if (idx >= 0) this.api.blocks.delete(idx);
+                    }
+                });
+
+                wrapper.appendChild(btn);
+
+                return wrapper;
+            }
+        };
+    })();
     const preview = document.getElementById('preview');
     const statusNode = document.createElement('div');
     statusNode.id = 'status';
@@ -775,6 +855,54 @@
         window.location.href = next;
     });
 
+    const editorHolder = document.getElementById('editorjs');
+
+    /**
+     * Кладёт явную кнопку «удалить» в каждый блок видео.
+     * Editor.js часто не реагирует на клик по нашему <video controls> и не показывает Block Tunes,
+     * поэтому даём пользователю прямой контроль.
+     */
+    function attachVideoDeleteButtons() {
+        if (!editorHolder) return;
+
+        editorHolder.querySelectorAll('.video-tool').forEach((videoNode) => {
+            if (videoNode.querySelector(':scope > .studio-block-delete-btn')) return;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'studio-block-delete-btn';
+            btn.setAttribute('aria-label', 'Удалить блок видео');
+            btn.title = 'Удалить блок видео';
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+
+            btn.addEventListener('click', async (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (!window.confirm('Удалить блок видео?')) return;
+
+                const ceBlock = videoNode.closest('.ce-block');
+                if (!ceBlock) return;
+
+                const redactor = editorHolder.querySelector('.codex-editor__redactor');
+                if (!redactor) return;
+
+                const all = Array.from(redactor.children).filter((n) => n.classList.contains('ce-block'));
+                const idx = all.indexOf(ceBlock);
+
+                if (idx < 0) return;
+
+                try {
+                    await editor.blocks.delete(idx);
+                } catch (e) {
+                    console.warn('blocks.delete() failed', e);
+                }
+            });
+
+            videoNode.appendChild(btn);
+        });
+    }
+
     const editor = new EditorJS({
         holder: 'editorjs',
         data: initialData,
@@ -787,6 +915,7 @@
             savedSnapshot = snapshotEditorData(data);
             baselineReady = true;
             setDirty(false);
+            attachVideoDeleteButtons();
         },
         async onChange() {
             const data = await editor.save();
@@ -796,9 +925,16 @@
                 if (baselineReady) {
                     setDirty(snapshotEditorData(data) !== savedSnapshot);
                 }
+                attachVideoDeleteButtons();
             }, 100);
         },
     });
+
+    /* Подстраховка: при изменениях DOM (например, добавили новый видео-блок) — навешиваем кнопку. */
+    if (editorHolder && 'MutationObserver' in window) {
+        const observer = new MutationObserver(() => attachVideoDeleteButtons());
+        observer.observe(editorHolder, { childList: true, subtree: true });
+    }
 
     document.getElementById('save-btn').addEventListener('click', async () => {
         statusNode.textContent = 'Сохранение...';
