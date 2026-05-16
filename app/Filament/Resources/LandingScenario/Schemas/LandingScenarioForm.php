@@ -11,28 +11,22 @@ use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
 
-/**
- * Форма сценария территории (карточка в секции «Как раскрывается территория»).
- *
- * Slug захардкожен на фронте (6 значений), редактировать нельзя.
- * Галерея фото общая для всех локалей.
- */
 class LandingScenarioForm
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Где это видно на сайте')
-                    ->description('Эти тексты показываются в секции «Как раскрывается территория» на главной — превью-карточкой и в модалке с галереей. Slug зашит в коде фронта.')
+                Section::make('Где это на сайте')
+                    ->description('Карточка в блоке «Как раскрывается территория» на главной. По нажатию открывается окно с текстом и фото.')
                     ->collapsible()
                     ->collapsed(true)
                     ->schema([]),
 
                 LandingFormComponents::imagesGallery(
                     directory: static fn (?LandingContent $record): string => 'landing-scenarios/'.($record?->slug() ?? 'misc'),
-                    title: 'Фотографии сценария (галерея)',
-                    description: 'Первое фото = обложка карточки сценария, все вместе = галерея в модалке. Перетаскиванием можно менять порядок. JPG / PNG / WEBP, до 8 МБ каждая.',
+                    title: 'Фотографии сценария',
+                    description: 'Первое фото — на карточке, остальные — в окне с подробностями. Порядок — перетаскиванием. JPG, PNG или WEBP, до 8 МБ.',
                 ),
 
                 Tabs::make('locales')
@@ -48,41 +42,46 @@ class LandingScenarioForm
     /**
      * @return array<int, mixed>
      */
-    private static function localeSchema(string $prefix): array
+    public static function localeSchema(string $prefix, bool $showInternalCode = true): array
     {
+        $leading = [];
+
+        if ($showInternalCode) {
+            $leading[] = TextInput::make("$prefix.slug")
+                ->label('Код сценария')
+                ->disabled()
+                ->dehydrated(true)
+                ->helperText('Не меняйте — привязан к этой карточке на сайте.');
+        }
+
         return [
             Section::make('Тексты сценария')
                 ->schema([
-                    TextInput::make("$prefix.slug")
-                        ->label('Slug (зашит в коде, поменять нельзя)')
-                        ->disabled()
-                        ->dehydrated(true)
-                        ->helperText('Идентификатор сценария на фронте.'),
+                    ...$leading,
                     TextInput::make("$prefix.eyebrow")
-                        ->label('Надзаголовок (eyebrow)')
+                        ->label('Короткая подпись над заголовком')
                         ->placeholder('Культурная ось'),
                     TextInput::make("$prefix.title")
-                        ->label('Заголовок (title)')
+                        ->label('Заголовок')
                         ->placeholder('Аллея родовых групп Тувы'),
                     Textarea::make("$prefix.description")
-                        ->label('Короткое описание (description)')
+                        ->label('Краткое описание')
                         ->rows(2)
-                        ->helperText('Это видно на превью-карточке сценария.'),
+                        ->helperText('На карточке в сетке сценариев.'),
                     Textarea::make("$prefix.full")
-                        ->label('Полное описание (full)')
+                        ->label('Полный текст')
                         ->rows(5)
-                        ->helperText('Большой текст в модалке.'),
+                        ->helperText('В окне, которое открывается по нажатию на карточку.'),
                     Textarea::make("$prefix.note")
-                        ->label('Примечание (note)')
-                        ->rows(2)
-                        ->helperText('Короткий комментарий под текстом.'),
+                        ->label('Примечание под текстом')
+                        ->rows(2),
                 ])
                 ->collapsible(),
 
-            Section::make('Хайлайты (highlights)')
-                ->description('Маркированный список ключевых тезисов сценария.')
+            Section::make('Ключевые моменты')
+                ->description('Список коротких тезисов в окне с подробностями.')
                 ->schema([
-                    LandingFormComponents::stringList("$prefix.highlights", 'Хайлайты', 'Один тезис в строке'),
+                    LandingFormComponents::stringList("$prefix.highlights", 'Пункты списка', 'Один тезис в строке'),
                 ])
                 ->collapsible(),
         ];

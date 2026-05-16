@@ -28,9 +28,9 @@ class LandingScenarioResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedMap;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Тексты лендинга';
+    protected static string|UnitEnum|null $navigationGroup = 'Каталог лендинга (тех.)';
 
-    protected static ?string $navigationLabel = 'Сценарии территории';
+    protected static ?string $navigationLabel = 'Сценарии (отдельно)';
 
     protected static ?string $modelLabel = 'Сценарий территории';
 
@@ -38,7 +38,7 @@ class LandingScenarioResource extends Resource
 
     protected static bool $hasTitleCaseModelLabel = false;
 
-    protected static ?int $navigationSort = 120;
+    protected static ?int $navigationSort = 210;
 
     protected static ?string $slug = 'landing/scenarios';
 
@@ -73,6 +73,11 @@ class LandingScenarioResource extends Resource
     }
 
     public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('landing.read') ?? false;
+    }
+
+    public static function shouldRegisterNavigation(): bool
     {
         return auth()->user()?->can('landing.read') ?? false;
     }

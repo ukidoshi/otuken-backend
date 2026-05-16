@@ -26,17 +26,17 @@ class LandingHomeResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedHome;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Тексты лендинга';
+    protected static string|UnitEnum|null $navigationGroup = 'Контент лендинга';
 
-    protected static ?string $navigationLabel = 'Главная страница лендинга';
+    protected static ?string $navigationLabel = 'Главная страница';
 
-    protected static ?string $modelLabel = 'Главная страница лендинга';
+    protected static ?string $modelLabel = 'Главная страница';
 
-    protected static ?string $pluralModelLabel = 'Главная страница лендинга';
+    protected static ?string $pluralModelLabel = 'Главная страница';
 
     protected static bool $hasTitleCaseModelLabel = false;
 
-    protected static ?int $navigationSort = 100;
+    protected static ?int $navigationSort = 10;
 
     protected static ?string $slug = 'landing/home';
 
@@ -70,6 +70,11 @@ class LandingHomeResource extends Resource
     }
 
     public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('landing.read') ?? false;
+    }
+
+    public static function shouldRegisterNavigation(): bool
     {
         return auth()->user()?->can('landing.read') ?? false;
     }

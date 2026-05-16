@@ -118,11 +118,9 @@ class LandingContent extends Model
     }
 
     /**
-     * Список ключей страниц для API (`site_pages.*`) и сидеров.
+     * Список ключей страниц для сидеров и исторических данных.
      *
-     * Редактирование главной (включая SEO) — в Filament: «Главная страница
-     * лендинга». Остальные страницы (complex, location, …) в админке не
-     * выведены; baseline — через сидер или правка в БД.
+     * Публичный API отдаёт только подмножество (см. SiteContentCache).
      *
      * @return array<string, string>
      */
@@ -130,6 +128,7 @@ class LandingContent extends Model
     {
         return [
             'site_pages.home' => 'Главная страница',
+            'site_pages.about_us' => 'О нас',
             'site_pages.complex' => 'О комплексе',
             'site_pages.location' => 'Локация',
             'site_pages.contacts' => 'Контакты',

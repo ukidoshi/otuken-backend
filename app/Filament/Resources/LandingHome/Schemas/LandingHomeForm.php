@@ -3,210 +3,312 @@
 namespace App\Filament\Resources\LandingHome\Schemas;
 
 use App\Filament\Components\LandingFormComponents;
+use App\Filament\Resources\LandingObject\Schemas\LandingObjectForm;
+use App\Filament\Resources\LandingScenario\Schemas\LandingScenarioForm;
+use App\Models\LandingContent;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Tabs;
 use Filament\Schemas\Components\Tabs\Tab;
 use Filament\Schemas\Schema;
+use Illuminate\Support\HtmlString;
 
 /**
- * Форма главной страницы лендинга «Өтүкен» (запись site_pages.home).
+ * Главная страница: секции сверху вниз, как на публичном сайте (локали в табах).
  *
- * content по локалям:
- *   - SEO: title, description, introTitle, introText, detailText, relatedLinks, faq
- *   - about, festival (тексты + модалка; фото фестиваля — в общей галерее)
- *   - objects_section, scenarios_section
- *
- * Фотогалерея фестиваля — общая для всех локалей, колонка `images`, FileUpload
- * вне табов RU/TUV/EN.
+ * Карточки объектов и сценариев редактируются здесь же (отдельные записи БД).
  */
 class LandingHomeForm
 {
     public static function configure(Schema $schema): Schema
     {
+        $siteUrl = config('landing.site_url', config('app.url'));
+
         return $schema
             ->components([
-                Section::make('Где это видно на сайте')
-                    ->description('Главная страница «/»: SEO, вступление, FAQ, блоки «Что такое Өтүкен», фестиваль, заголовки секций объектов и сценариев.')
-                    ->collapsible()
-                    ->collapsed(true)
-                    ->schema([]),
+                Section::make('Подсказка')
+                    ->description(new HtmlString(
+                        '<p class="text-sm text-gray-600 dark:text-gray-400">Ниже блоки главной страницы — сверху вниз, как на сайте. '
+                        .'Новости на главной правятся в разделе «Новости». Карту «Регионы» здесь не трогаем.</p>'
+                        .'<p class="mt-2 text-sm"><a href="'.e($siteUrl).'" target="_blank" rel="noopener" class="text-primary-600 underline">Посмотреть главную на сайте</a></p>'
+                    ))
+                    ->schema([])
+                    ->columnSpanFull(),
 
-                LandingFormComponents::imagesGallery(
-                    directory: 'landing-festival',
-                    title: 'Фотографии фестиваля «Мой род – моя гордость»',
-                    description: 'Галерея фестиваля — одна на сайт. Первая фотография становится preview-обложкой, все вместе — содержимое модалки «Подробнее о фестивале». Перетаскиванием можно менять порядок.',
-                ),
-
-                Tabs::make('locales')
+                Tabs::make('home_locales')
                     ->columnSpanFull()
                     ->tabs([
-                        Tab::make('Русский (RU)')->icon('heroicon-o-language')->schema(self::homeSchema('content.ru')),
-                        Tab::make('Тувинский (TUV)')->icon('heroicon-o-language')->schema(self::homeSchema('content.tuv')),
-                        Tab::make('English (EN)')->icon('heroicon-o-language')->schema(self::homeSchema('content.en')),
+                        Tab::make('Русский (RU)')->icon('heroicon-o-language')->schema(self::localeStack('content.ru')),
+                        Tab::make('Тувинский (TUV)')->icon('heroicon-o-language')->schema(self::localeStack('content.tuv')),
+                        Tab::make('English (EN)')->icon('heroicon-o-language')->schema(self::localeStack('content.en')),
                     ]),
+
+                ...self::objectCatalogSections(),
+
+                Section::make('4. Блок фестиваля — показ на главной')
+                    ->description('Когда фестиваль закончился, снимите галочку — блок исчезнет с сайта, тексты и фото останутся на следующий раз.')
+                    ->schema([
+                        Toggle::make('festival_visible')
+                            ->label('Показывать блок фестиваля на главной')
+                            ->helperText('Снятая галочка скрывает блок на сайте, ничего не удаляется.')
+                            ->default(true),
+                        LandingFormComponents::imagesGallery(
+                            directory: 'landing-festival',
+                            title: 'Фотографии фестиваля',
+                            description: 'Одни и те же фото для всех языков. Первое — на карточке, остальные — в окне «Подробнее». Форматы: JPG, PNG или WEBP.',
+                        ),
+                    ])
+                    ->columnSpanFull(),
+
+                ...self::scenarioCatalogSections(),
             ]);
     }
 
     /**
+     * Секции 1–2, заголовки 3 и 5, тексты фестиваля, SEO и FAQ внутри одной локали.
+     *
      * @return array<int, mixed>
      */
-    private static function homeSchema(string $prefix): array
+    private static function localeStack(string $prefix): array
     {
         return [
-            self::seoSection($prefix),
-            self::aboutSection($prefix),
-            self::festivalSection($prefix),
-            self::objectsSectionHeading($prefix),
-            self::scenariosSectionHeading($prefix),
+            self::sectionHero($prefix),
+            self::sectionAbout($prefix),
+            self::sectionObjectsHeading($prefix),
+            self::sectionFestivalTexts($prefix),
+            self::sectionScenariosHeading($prefix),
+            self::sectionSeoMisc($prefix),
         ];
     }
 
-    /**
-     * SEO главной + вступление + связанные ссылки + FAQ (попадают в data.site_pages.home в API).
-     */
-    private static function seoSection(string $prefix): Section
+    private static function sectionHero(string $prefix): Section
     {
-        return Section::make('Главная — SEO, вступление и FAQ')
-            ->description('Поля для title/description страницы, вступительный блок и FAQ. Пути в relatedLinks зашиты на фронте — поля to только для просмотра.')
-            ->collapsible()
-            ->collapsed(true)
+        return Section::make('1. Первый экран')
+            ->description('Самый верх главной: крупный заголовок и текст под ним.')
             ->schema([
-                TextInput::make("$prefix.title")
-                    ->label('SEO-заголовок (title)')
-                    ->helperText('Показывается во вкладке браузера и в выдаче поиска.'),
-                Textarea::make("$prefix.description")
-                    ->label('SEO-описание (description)')
-                    ->rows(3),
-                TextInput::make("$prefix.introTitle")->label('Заголовок вступления (introTitle)'),
-                Textarea::make("$prefix.introText")->label('Текст вступления (introText)')->rows(4),
-                Textarea::make("$prefix.detailText")->label('Дополнительный текст (detailText)')->rows(4),
-                LandingFormComponents::relatedLinks("$prefix.relatedLinks"),
-                LandingFormComponents::faq("$prefix.faq"),
-            ]);
+                TextInput::make("$prefix.heroBadge")
+                    ->label('Строка над заголовком')
+                    ->helperText('Небольшая подпись над главным заголовком, например регион или даты.')
+                    ->placeholder('Республика Тыва • …'),
+                TextInput::make("$prefix.introTitle")
+                    ->label('Главный заголовок')
+                    ->helperText('Крупный заголовок в самом верху страницы.'),
+                Textarea::make("$prefix.introText")
+                    ->label('Текст под заголовком')
+                    ->rows(4)
+                    ->helperText('Короткое описание сразу под главным заголовком.'),
+                Fieldset::make('Для поиска в интернете')
+                    ->schema([
+                        TextInput::make("$prefix.title")
+                            ->label('Заголовок во вкладке браузера')
+                            ->helperText('То, что видно в Google, Яндексе и в названии вкладки.'),
+                        Textarea::make("$prefix.description")
+                            ->label('Краткое описание для поиска')
+                            ->rows(3)
+                            ->helperText('Короткий текст для результатов поиска.'),
+                    ]),
+            ])
+            ->collapsible();
     }
 
-    private static function aboutSection(string $prefix): Section
+    private static function sectionAbout(string $prefix): Section
     {
         $about = "$prefix.about";
 
-        return Section::make('Блок «Что такое Өтүкен» (about)')
-            ->description('Лид-блок главной: бейдж, заголовок, краткий смысл, карточки, развёрнутая часть и summary.')
-            ->collapsible()
-            ->collapsed(true)
+        return Section::make('2. Блок «Что такое Өтүкен?»')
+            ->description('Текст и карточки в блоке про суть комплекса.')
             ->schema([
                 TextInput::make("$about.badge")
-                    ->label('Бейдж')
+                    ->label('Подпись над заголовком')
                     ->placeholder('Этнокультурный комплекс • живая среда традиций'),
                 TextInput::make("$about.title")
                     ->label('Заголовок')
                     ->placeholder('Что такое «Өтүкен»?'),
                 Textarea::make("$about.lead")
-                    ->label('Лид (краткий смысл)')
+                    ->label('Короткий смысл блока')
                     ->rows(3),
 
                 LandingFormComponents::iconCards(
                     "$about.cards",
-                    'Карточки (3 шт: культура, события, инвест-логика)',
+                    'Три карточки в ряд',
                     'Добавить карточку',
-                    'По исходному дизайну ровно три карточки. Иконка — эмодзи, например 🏛️ / 🎭 / 📈.',
+                    'Обычно три карточки. В поле «Иконка» можно вставить эмодзи: 🏛️ 🎭 📈',
                 ),
 
-                Fieldset::make('Featured-блок (about.feature)')
+                Fieldset::make('Развёрнутый блок с этапами')
                     ->schema([
-                        TextInput::make("$about.feature.kicker")->label('Kicker (надзаголовок)'),
-                        TextInput::make("$about.feature.title")->label('Заголовок featured-блока'),
+                        TextInput::make("$about.feature.kicker")->label('Надзаголовок'),
+                        TextInput::make("$about.feature.title")->label('Заголовок блока'),
                         LandingFormComponents::stringList("$about.feature.paragraphs", 'Абзацы', 'Один абзац — одна строка.'),
-                        LandingFormComponents::iconCards("$about.feature.bullets", 'Буллеты (icon + title + text)', 'Добавить буллет'),
-                        Fieldset::make('Этапы развития (about.feature.phases)')
+                        LandingFormComponents::iconCards("$about.feature.bullets", 'Пункты со значками', 'Добавить пункт'),
+                        Fieldset::make('Этапы развития')
                             ->schema([
-                                TextInput::make("$about.feature.phases.kicker")->label('Kicker блока этапов'),
+                                TextInput::make("$about.feature.phases.kicker")->label('Надзаголовок над этапами'),
                                 LandingFormComponents::cards("$about.feature.phases.items")
-                                    ->label('Этапы (title + text)'),
+                                    ->label('Этапы'),
                             ])->columns(1),
                     ])->columns(1),
 
-                Fieldset::make('Summary-блок (about.summary)')
+                Fieldset::make('Итоговый блок с кнопками')
                     ->schema([
-                        TextInput::make("$about.summary.kicker")->label('Kicker'),
-                        TextInput::make("$about.summary.title")->label('Заголовок summary'),
-                        Textarea::make("$about.summary.text")->label('Текст summary')->rows(3),
-                        LandingFormComponents::titleValueList("$about.summary.stats", 'Статы (title + value)', 'Подпись', 'Значение'),
-                        TextInput::make("$about.summary.primaryLabel")->label('Подпись основной CTA'),
+                        TextInput::make("$about.summary.kicker")->label('Надзаголовок'),
+                        TextInput::make("$about.summary.title")->label('Заголовок'),
+                        Textarea::make("$about.summary.text")->label('Текст')->rows(3),
+                        LandingFormComponents::titleValueList("$about.summary.stats", 'Цифры и факты', 'Подпись', 'Значение'),
+                        TextInput::make("$about.summary.primaryLabel")->label('Текст основной кнопки'),
                         TextInput::make("$about.summary.primaryTarget")
-                            ->label('Цель основной CTA')
-                            ->helperText('Логический id блока на странице: например, "objects" / "map".'),
-                        TextInput::make("$about.summary.secondaryLabel")->label('Подпись вторичной CTA'),
-                        TextInput::make("$about.summary.secondaryTarget")->label('Цель вторичной CTA'),
+                            ->label('Куда ведёт основная кнопка')
+                            ->helperText('Служебное поле: к какому блоку на странице прокрутить. Обычно не меняют.'),
+                        TextInput::make("$about.summary.secondaryLabel")->label('Текст второй кнопки'),
+                        TextInput::make("$about.summary.secondaryTarget")->label('Куда ведёт вторая кнопка'),
                     ])->columns(2),
-            ]);
+            ])
+            ->collapsible();
     }
 
-    private static function festivalSection(string $prefix): Section
-    {
-        $f = "$prefix.festival";
-
-        return Section::make('Блок «Фестиваль» (festival)')
-            ->description('Карточка фестиваля на главной и содержимое модалки «Подробнее о фестивале». Фото — выше, в общей галерее (одна для всех локалей).')
-            ->collapsible()
-            ->collapsed(true)
-            ->schema([
-                TextInput::make("$f.badge")->label('Бейдж')->placeholder('Первый этап реализации'),
-                TextInput::make("$f.title")->label('Заголовок')->placeholder('Фестиваль «Мой род – моя гордость»'),
-                TextInput::make("$f.dateText")->label('Подпись с датами')->placeholder('21–28 июня'),
-                Textarea::make("$f.lead")->label('Лид')->rows(3),
-                TextInput::make("$f.panelTitle")->label('Заголовок блока «Что создаёт фестиваль»'),
-                LandingFormComponents::cards("$f.features")
-                    ->label('Что создаёт фестиваль (title + text)'),
-                Textarea::make("$f.summary")->label('Summary (краткий итог под features)')->rows(3),
-                TextInput::make("$f.detailButtonLabel")->label('Подпись кнопки модалки')->placeholder('Подробнее о фестивале'),
-
-                Fieldset::make('Содержимое модалки (festival.detail)')
-                    ->schema([
-                        Textarea::make("$f.detail.intro")->label('Вводный абзац модалки')->rows(3),
-                        LandingFormComponents::sections("$f.detail.sections", 'Разделы модалки: каждый — заголовок + абзацы + (опционально) список.'),
-                        LandingFormComponents::stringList("$f.detail.highlights", 'Хайлайты', 'Один пункт-выжимка'),
-                        LandingFormComponents::faq("$f.detail.faq"),
-                    ])->columns(1),
-            ]);
-    }
-
-    private static function objectsSectionHeading(string $prefix): Section
+    private static function sectionObjectsHeading(string $prefix): Section
     {
         $os = "$prefix.objects_section";
 
-        return Section::make('Заголовок секции «Ключевые объекты» (objects_section)')
-            ->description('Шапка над сеткой карточек объектов на главной.')
-            ->collapsible()
-            ->collapsed(true)
+        return Section::make('3. Заголовок секции «Ключевые объекты»')
+            ->description('Шапка над сеткой карточек. Сами карточки — в блоках ниже (каждая с галереей).')
             ->schema([
-                TextInput::make("$os.badge")->label('Бейдж')->placeholder('Объекты комплекса'),
+                TextInput::make("$os.badge")->label('Подпись над заголовком')->placeholder('Объекты комплекса'),
                 TextInput::make("$os.title")->label('Заголовок')->placeholder('Ключевые объекты «Өтүкен»'),
-                Textarea::make("$os.lead")->label('Лид')->rows(3),
-            ]);
+                Textarea::make("$os.lead")->label('Короткий текст под заголовком')->rows(3),
+            ])
+            ->collapsible();
     }
 
-    private static function scenariosSectionHeading(string $prefix): Section
+    private static function sectionFestivalTexts(string $prefix): Section
+    {
+        $f = "$prefix.festival";
+
+        return Section::make('4. Блок фестиваля (тексты)')
+            ->description('Тексты блока на главной. Фотографии — в отдельном разделе ниже, они общие для всех языков.')
+            ->schema([
+                TextInput::make("$f.badge")->label('Подпись над заголовком')->placeholder('Первый этап реализации'),
+                TextInput::make("$f.title")->label('Заголовок')->placeholder('Фестиваль «Мой род – моя гордость»'),
+                TextInput::make("$f.dateText")->label('Даты')->placeholder('21–28 июня'),
+                Textarea::make("$f.lead")->label('Короткий текст')->rows(3),
+                TextInput::make("$f.panelTitle")->label('Заголовок списка «Что создаёт фестиваль»'),
+                LandingFormComponents::cards("$f.features")
+                    ->label('Пункты «Что создаёт фестиваль»'),
+                Textarea::make("$f.summary")->label('Итоговая фраза под списком')->rows(3),
+                TextInput::make("$f.detailButtonLabel")->label('Текст кнопки «Подробнее»')->placeholder('Подробнее о фестивале'),
+
+                Fieldset::make('Окно «Подробнее о фестивале»')
+                    ->schema([
+                        Textarea::make("$f.detail.intro")->label('Вступительный абзац')->rows(3),
+                        LandingFormComponents::sections("$f.detail.sections", 'Разделы внутри окна: заголовок, текст, при необходимости список.'),
+                        LandingFormComponents::stringList("$f.detail.highlights", 'Ключевые моменты', 'Один пункт в строке'),
+                        LandingFormComponents::faq("$f.detail.faq"),
+                    ])->columns(1),
+            ])
+            ->collapsible();
+    }
+
+    private static function sectionScenariosHeading(string $prefix): Section
     {
         $ss = "$prefix.scenarios_section";
 
-        return Section::make('Заголовок секции «Сценарии территории» (scenarios_section)')
-            ->description('Шапка над сеткой сценариев на главной. Дополнительные поля guideText / guideChips дают подсказку гостю под сеткой.')
-            ->collapsible()
-            ->collapsed(true)
+        return Section::make('5. Заголовок секции «Сценарии пространства»')
+            ->description('Шапка над сеткой сценариев. Карточки сценариев — в блоках ниже.')
             ->schema([
-                TextInput::make("$ss.badge")->label('Бейдж')->placeholder('Сценарии пространства'),
+                TextInput::make("$ss.badge")->label('Подпись над заголовком')->placeholder('Сценарии пространства'),
                 TextInput::make("$ss.title")->label('Заголовок')->placeholder('Как раскрывается территория'),
-                Textarea::make("$ss.lead")->label('Лид')->rows(3),
-                Textarea::make("$ss.guideText")->label('Поясняющий текст (guideText)')->rows(3),
+                Textarea::make("$ss.lead")->label('Короткий текст под заголовком')->rows(3),
+                Textarea::make("$ss.guideText")->label('Поясняющий текст под сеткой')->rows(3),
                 LandingFormComponents::stringList(
                     "$ss.guideChips",
-                    'Чипсы-подсказки (guideChips)',
+                    'Короткие подсказки под сеткой',
                     'Одна короткая фраза в строке',
-                    'Например: «Фото и ракурсы», «Краткий смысл», «Понятный контекст».',
+                    'Например: «Фото и ракурсы», «Краткий смысл».',
                 ),
-            ]);
+            ])
+            ->collapsible();
+    }
+
+    private static function sectionSeoMisc(string $prefix): Section
+    {
+        return Section::make('Дополнительно: текст, ссылки, FAQ')
+            ->description('Ниже первого экрана: детальный текст и блок вопросов.')
+            ->schema([
+                Textarea::make("$prefix.detailText")
+                    ->label('Дополнительный текст на главной')
+                    ->rows(4)
+                    ->helperText('Длинный поясняющий текст, если он есть на макете главной.'),
+                LandingFormComponents::relatedLinks("$prefix.relatedLinks"),
+                LandingFormComponents::faq("$prefix.faq"),
+            ])
+            ->collapsible()
+            ->collapsed(true);
+    }
+
+    /**
+     * @return array<int, Section>
+     */
+    private static function objectCatalogSections(): array
+    {
+        $sections = [];
+
+        foreach (LandingContent::objectSlugs() as $slug => $label) {
+            $sections[] = Section::make('3. Объект на главной: '.$label)
+                ->description('Тексты и фото карточки в блоке «Ключевые объекты». По нажатию на сайте открывается окно с подробностями.')
+                ->schema([
+                    LandingFormComponents::imagesGalleryAtPath(
+                        "catalog_objects.{$slug}.images",
+                        fn (): string => 'landing-objects/'.$slug,
+                        'Галерея объекта',
+                        'Перетащите фото, чтобы поменять порядок. Первое — на карточке. JPG, PNG или WEBP, до 8 МБ.',
+                    ),
+                    Tabs::make('obj_tabs_'.$slug)
+                        ->columnSpanFull()
+                        ->tabs([
+                            Tab::make('RU')->schema(LandingObjectForm::localeSchema("catalog_objects.{$slug}.content.ru", showInternalCode: false)),
+                            Tab::make('TUV')->schema(LandingObjectForm::localeSchema("catalog_objects.{$slug}.content.tuv", showInternalCode: false)),
+                            Tab::make('EN')->schema(LandingObjectForm::localeSchema("catalog_objects.{$slug}.content.en", showInternalCode: false)),
+                        ]),
+                ])
+                ->collapsible()
+                ->columnSpanFull();
+        }
+
+        return $sections;
+    }
+
+    /**
+     * @return array<int, Section>
+     */
+    private static function scenarioCatalogSections(): array
+    {
+        $sections = [];
+
+        foreach (LandingContent::scenarioSlugs() as $slug => $label) {
+            $sections[] = Section::make('5. Сценарий: '.$label)
+                ->description('Карточка в блоке «Как раскрывается территория». По нажатию — окно с текстом и фото.')
+                ->schema([
+                    LandingFormComponents::imagesGalleryAtPath(
+                        "catalog_scenarios.{$slug}.images",
+                        fn (): string => 'landing-scenarios/'.$slug,
+                        'Фотографии сценария',
+                        'Первое фото — на карточке, остальные — в окне с подробностями. JPG, PNG или WEBP, до 8 МБ.',
+                    ),
+                    Tabs::make('sc_tabs_'.$slug)
+                        ->columnSpanFull()
+                        ->tabs([
+                            Tab::make('RU')->schema(LandingScenarioForm::localeSchema("catalog_scenarios.{$slug}.content.ru", showInternalCode: false)),
+                            Tab::make('TUV')->schema(LandingScenarioForm::localeSchema("catalog_scenarios.{$slug}.content.tuv", showInternalCode: false)),
+                            Tab::make('EN')->schema(LandingScenarioForm::localeSchema("catalog_scenarios.{$slug}.content.en", showInternalCode: false)),
+                        ]),
+                ])
+                ->collapsible()
+                ->columnSpanFull();
+        }
+
+        return $sections;
     }
 }

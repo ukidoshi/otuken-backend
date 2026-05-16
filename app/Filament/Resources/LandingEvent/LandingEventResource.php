@@ -28,9 +28,9 @@ class LandingEventResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedCalendarDays;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Тексты лендинга';
+    protected static string|UnitEnum|null $navigationGroup = 'Каталог лендинга (тех.)';
 
-    protected static ?string $navigationLabel = 'События';
+    protected static ?string $navigationLabel = 'События (отдельно)';
 
     protected static ?string $modelLabel = 'Событие';
 
@@ -38,7 +38,7 @@ class LandingEventResource extends Resource
 
     protected static bool $hasTitleCaseModelLabel = false;
 
-    protected static ?int $navigationSort = 130;
+    protected static ?int $navigationSort = 220;
 
     protected static ?string $slug = 'landing/events';
 
@@ -73,6 +73,11 @@ class LandingEventResource extends Resource
     }
 
     public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('landing.read') ?? false;
+    }
+
+    public static function shouldRegisterNavigation(): bool
     {
         return auth()->user()?->can('landing.read') ?? false;
     }

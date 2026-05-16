@@ -54,6 +54,7 @@ class LandingFormComponents
             ->afterStateHydrated(static function (Repeater $component, $state): void {
                 if (! is_array($state)) {
                     $component->state([]);
+
                     return;
                 }
                 $normalized = [];
@@ -78,6 +79,7 @@ class LandingFormComponents
                         $out[] = $row;
                     }
                 }
+
                 return $out;
             });
 
@@ -94,7 +96,7 @@ class LandingFormComponents
     public static function faq(string $statePath, string $helperText = ''): Repeater
     {
         $repeater = Repeater::make($statePath)
-            ->label('FAQ — частые вопросы')
+            ->label('Частые вопросы')
             ->schema([
                 TextInput::make('question')
                     ->label('Вопрос')
@@ -151,7 +153,7 @@ class LandingFormComponents
     public static function sections(string $statePath = 'sections', string $helperText = ''): Repeater
     {
         $repeater = Repeater::make($statePath)
-            ->label('Разделы (sections)')
+            ->label('Разделы страницы')
             ->schema([
                 TextInput::make('title')
                     ->label('Заголовок раздела')
@@ -181,7 +183,7 @@ class LandingFormComponents
     public static function relatedLinks(string $statePath = 'relatedLinks'): Repeater
     {
         return Repeater::make($statePath)
-            ->label('Связанные страницы (relatedLinks)')
+            ->label('Ссылки на другие разделы')
             ->schema([
                 TextInput::make('title')
                     ->label('Подпись ссылки')
@@ -190,10 +192,10 @@ class LandingFormComponents
                     ->label('Описание под ссылкой')
                     ->rows(2),
                 TextInput::make('to')
-                    ->label('Путь на сайте (фронт фиксирует)')
+                    ->label('Адрес страницы')
                     ->disabled()
                     ->dehydrated(true)
-                    ->helperText('Изменение пути не повлияет на фронт — он зашит в коде Vue.'),
+                    ->helperText('Куда ведёт ссылка. Обычно не меняют.'),
             ])
             ->addActionLabel('Добавить ссылку')
             ->reorderable(true)
@@ -265,7 +267,7 @@ class LandingFormComponents
      * Поле «Фотографии (галерея)» с drag&drop и хранением на public-диске.
      *
      * @param  string|Closure  $directory  относительный путь (например,
-     *   'landing-festival' или замыкание `fn (?LandingContent $record) => "landing-objects/{$record?->slug()}"`).
+     *                                     'landing-festival' или замыкание `fn (?LandingContent $record) => "landing-objects/{$record?->slug()}"`).
      */
     public static function imagesGallery(string|Closure $directory, string $title, string $description = ''): Section
     {
@@ -291,7 +293,54 @@ class LandingFormComponents
             ->maxSize(8192)
             ->panelLayout('grid')
             ->columnSpanFull()
-            ->helperText('Загрузка нескольких файлов разом — поддерживается. Удалённые файлы исчезнут и из storage на сервере.');
+            ->helperText('Можно выбрать несколько файлов сразу. Удалённые фото пропадут с сайта.');
+
+        $field->directory($directory);
+
+        $section = Section::make($title)
+            ->collapsible()
+            ->collapsed(false)
+            ->schema([$field]);
+
+        if ($description !== '') {
+            $section->description($description);
+        }
+
+        return $section;
+    }
+
+    /**
+     * Галерея с произвольным путём состояния (вложенные формы главной).
+     */
+    public static function imagesGalleryAtPath(
+        string $statePath,
+        string|Closure $directory,
+        string $title,
+        string $description = '',
+    ): Section {
+        $field = FileUpload::make($statePath)
+            ->label('Фотографии')
+            ->hiddenLabel()
+            ->multiple()
+            ->reorderable()
+            ->appendFiles()
+            ->image()
+            ->imageEditor(false)
+            ->openable()
+            ->downloadable()
+            ->disk('public')
+            ->visibility('public')
+            ->preserveFilenames(false)
+            ->getUploadedFileNameForStorageUsing(static function (TemporaryUploadedFile $file): string {
+                $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
+
+                return (string) Str::ulid().'.'.$ext;
+            })
+            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+            ->maxSize(8192)
+            ->panelLayout('grid')
+            ->columnSpanFull()
+            ->helperText('JPG, PNG или WEBP, до 8 МБ. Перетащите фото, чтобы поменять порядок.');
 
         $field->directory($directory);
 
@@ -313,27 +362,27 @@ class LandingFormComponents
      */
     public static function cta(string $statePath = 'cta'): Section
     {
-        return Section::make('CTA-блок')
-            ->description('Призыв к действию в конце страницы. Тексты редактируются здесь, ссылки фиксированы в коде фронта.')
+        return Section::make('Блок с кнопками внизу страницы')
+            ->description('Заголовок, текст и подписи кнопок. Куда ведут кнопки, обычно не меняют.')
             ->schema([
                 TextInput::make("$statePath.title")
-                    ->label('Заголовок CTA'),
+                    ->label('Заголовок'),
                 Textarea::make("$statePath.text")
-                    ->label('Текст CTA')
+                    ->label('Текст')
                     ->rows(2),
                 Fieldset::make('Основная кнопка')->schema([
                     TextInput::make("$statePath.primary.label")
-                        ->label('Подпись основной кнопки'),
+                        ->label('Текст на кнопке'),
                     TextInput::make("$statePath.primary.to")
-                        ->label('Путь основной кнопки (фронт фиксирует)')
+                        ->label('Куда ведёт кнопка')
                         ->disabled()
                         ->dehydrated(true),
                 ])->columns(2),
-                Fieldset::make('Вторичная кнопка')->schema([
+                Fieldset::make('Вторая кнопка')->schema([
                     TextInput::make("$statePath.secondary.label")
-                        ->label('Подпись вторичной кнопки'),
+                        ->label('Текст на кнопке'),
                     TextInput::make("$statePath.secondary.to")
-                        ->label('Путь вторичной кнопки (фронт фиксирует)')
+                        ->label('Куда ведёт кнопка')
                         ->disabled()
                         ->dehydrated(true),
                 ])->columns(2),

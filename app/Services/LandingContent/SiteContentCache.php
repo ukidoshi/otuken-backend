@@ -15,19 +15,13 @@ use Illuminate\Support\Facades\Storage;
  * сценариев/фестиваля.
  *
  * Контракт ответа:
- *   data.site_pages   — всегда объект, минимум {}. Ключи: home (SEO+интро),
- *                       complex, location, contacts, objects_page, events_page
- *                       — каждая страница с произвольным подмножеством полей.
- *   data.home         — всегда объект, минимум {}, внутри только белый список
- *                       подразделов: about, festival, objects_section,
- *                       scenarios_section. festival.images — общие фото
- *                       фестиваля (не зависят от локали).
- *   data.objects      — всегда массив (может быть пустым), каждый объект
- *                       минимум { slug, images:[] }.
- *   data.scenarios    — всегда массив (может быть пустым), каждый сценарий
- *                       минимум { slug, images:[] }.
- *   data.events       — всегда массив (может быть пустым), каждое событие
- *                       минимум { slug, images:[] }.
+ *   data.site_pages   — home (SEO и Hero), about_page («О нас»).
+ *                       Старые страницы complex/location/… в этот ответ не входят.
+ *   data.home         — about, festival (с visible и images), objects_section,
+ *                       scenarios_section.
+ *   data.objects      — объекты для главной и карточек.
+ *   data.scenarios    — сценарии.
+ *   data.events       — зарезервировано; не заполняется (пустой массив в ответе).
  *
  * Все строковые поля, пустые после trim(), не возвращаются. Пустые массивы
  * (и сирые объекты) тоже не возвращаются. Это переводит контракт «нет
@@ -37,10 +31,11 @@ class SiteContentCache
 {
     public const TTL_SECONDS = 600;
 
-    /** Поля верхнего уровня записи site_pages.home, которые относятся к SEO. */
+    /** Поля верхнего уровня записи site_pages.home: SEO и первый экран (Hero). */
     private const HOME_SEO_KEYS = [
         'title',
         'description',
+        'heroBadge',
         'introTitle',
         'introText',
         'detailText',
@@ -59,11 +54,7 @@ class SiteContentCache
     /** Разрешённые section_key для data.site_pages.{slug}. */
     private const SITE_PAGE_SECTIONS = [
         'site_pages.home' => 'home',
-        'site_pages.complex' => 'complex',
-        'site_pages.location' => 'location',
-        'site_pages.contacts' => 'contacts',
-        'site_pages.objects_page' => 'objects_page',
-        'site_pages.events_page' => 'events_page',
+        'site_pages.about_us' => 'about_page',
     ];
 
     /**
@@ -108,11 +99,14 @@ class SiteContentCache
         $home = [];
         $objects = [];
         $scenarios = [];
-        $events = [];
 
         foreach ($records as $record) {
             $key = $record->section_key;
             $rawLocalized = $record->localized($locale);
+
+            if (str_starts_with($key, 'event.')) {
+                continue;
+            }
 
             // === Главная: разнести SEO (site_pages.home) + блоки (data.home) ===
             if ($key === 'site_pages.home') {
@@ -130,6 +124,8 @@ class SiteContentCache
                     }
                 }
 
+                $festivalVisible = (bool) ($record->localized('ru')['festival']['visible'] ?? true);
+
                 // Фотографии фестиваля — общие для всех локалей, лежат в
                 // колонке `images` записи site_pages.home. Прикрепляются
                 // даже если text-локаль не заполнена (фронт всегда сможет
@@ -141,40 +137,42 @@ class SiteContentCache
                     $home['festival'] = $festival;
                 }
 
+                if (isset($home['festival']) && is_array($home['festival'])) {
+                    $home['festival']['visible'] = $festivalVisible;
+                } elseif (! $festivalVisible) {
+                    $home['festival'] = [
+                        'visible' => false,
+                    ];
+                }
+
                 continue;
             }
 
-            // === Остальные страницы: complex / location / contacts / objects_page / events_page ===
+            // === Остальные страницы: whitelist site_pages.* (сейчас только «О нас») ===
             if (isset(self::SITE_PAGE_SECTIONS[$key])) {
                 $cleaned = self::pruneEmpty($rawLocalized);
                 if (is_array($cleaned) && $cleaned !== []) {
                     $sitePages[self::SITE_PAGE_SECTIONS[$key]] = $cleaned;
                 }
+
                 continue;
             }
 
             // === Объекты ===
             if (str_starts_with($key, 'object.')) {
                 $objects[] = self::buildSluggedEntry($record, $rawLocalized);
+
                 continue;
             }
 
             // === Сценарии ===
             if (str_starts_with($key, 'scenario.')) {
                 $scenarios[] = self::buildSluggedEntry($record, $rawLocalized);
+
                 continue;
             }
 
-            // === События ===
-            if (str_starts_with($key, 'event.')) {
-                $events[] = self::buildSluggedEntry($record, $rawLocalized);
-                continue;
-            }
-
-            // Любые посторонние section_key игнорируем — их не должно быть
-            // в админке. Если такие записи остались от старых импортов,
-            // они не попадут во фронт, пока в админке нет соответствующего
-            // ресурса.
+            // Любые посторонние section_key игнорируем
         }
 
         return [
@@ -182,7 +180,7 @@ class SiteContentCache
             'home' => $home,
             'objects' => $objects,
             'scenarios' => $scenarios,
-            'events' => $events,
+            'events' => [],
         ];
     }
 

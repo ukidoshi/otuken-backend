@@ -42,6 +42,8 @@ class RolesAndPermissionsSeeder extends Seeder
             Permission::findOrCreate($permission, 'web');
         }
 
+        Permission::query()->whereIn('name', ['landing.main', 'landing.catalog'])->delete();
+
         $userRole = Role::findOrCreate('user', 'web');
         $userRole->syncPermissions([
             ...$newsPermissions,

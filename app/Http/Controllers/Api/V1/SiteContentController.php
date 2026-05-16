@@ -13,10 +13,9 @@ use Illuminate\Http\Request;
  *
  * GET /api/v1/site-content?locale=ru|tuv|en
  *
- * Возвращает «слой» правок для одной локали. Фронт сначала загружает
- * bundled-дефолты, затем накладывает поверх ответ этого эндпоинта
- * (см. applySitePagesOverrides / applyObjectCatalogOverrides /
- * applyEventCatalogOverrides на стороне Vue).
+ * Состав ответа `data` — см. SiteContentCache: site_pages (home, about_page),
+ * home (в т.ч. festival.visible), objects, scenarios; events — пустой массив.
+ * Фронт накладывает поверх bundled-дефолты.
  */
 class SiteContentController extends Controller
 {

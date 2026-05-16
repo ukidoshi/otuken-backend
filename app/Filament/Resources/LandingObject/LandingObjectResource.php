@@ -21,9 +21,9 @@ class LandingObjectResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBuildingLibrary;
 
-    protected static string|UnitEnum|null $navigationGroup = 'Тексты лендинга';
+    protected static string|UnitEnum|null $navigationGroup = 'Каталог лендинга (тех.)';
 
-    protected static ?string $navigationLabel = 'Объекты комплекса';
+    protected static ?string $navigationLabel = 'Объекты (отдельно)';
 
     protected static ?string $modelLabel = 'Объект комплекса';
 
@@ -31,7 +31,7 @@ class LandingObjectResource extends Resource
 
     protected static bool $hasTitleCaseModelLabel = false;
 
-    protected static ?int $navigationSort = 110;
+    protected static ?int $navigationSort = 200;
 
     protected static ?string $slug = 'landing/objects';
 
@@ -66,6 +66,11 @@ class LandingObjectResource extends Resource
     }
 
     public static function canViewAny(): bool
+    {
+        return auth()->user()?->can('landing.read') ?? false;
+    }
+
+    public static function shouldRegisterNavigation(): bool
     {
         return auth()->user()?->can('landing.read') ?? false;
     }

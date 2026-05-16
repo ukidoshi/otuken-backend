@@ -8,6 +8,11 @@ define('LARAVEL_START', microtime(true));
 // Register the Composer autoloader...
 require __DIR__.'/vendor/autoload.php';
 
+if (function_exists('ini_set')) {
+    // Дефолт PHP 128M часто не хватает для migrate/seed, filament:optimize и т.д.
+    @ini_set('memory_limit', getenv('PHP_MEMORY_LIMIT') ?: '512M');
+}
+
 // Bootstrap Laravel and handle the command...
 $status = (require_once __DIR__.'/bootstrap/app.php')
     ->handleCommand(new ArgvInput);

@@ -13,12 +13,15 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use UnitEnum;
 
 class NewsResource extends Resource
 {
     protected static ?string $model = News::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
+
+    protected static string|UnitEnum|null $navigationGroup = 'Новости';
 
     protected static ?string $navigationLabel = 'Новости';
 
@@ -27,6 +30,8 @@ class NewsResource extends Resource
     protected static ?string $pluralModelLabel = 'Новости';
 
     protected static bool $hasTitleCaseModelLabel = false;
+
+    protected static ?int $navigationSort = 40;
 
     public static function form(Schema $schema): Schema
     {
