@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LandingHome\Pages;
 
+use App\Filament\Concerns\HasHeaderSaveAction;
 use App\Filament\Resources\LandingHome\LandingHomeResource;
 use App\Models\LandingContent;
 use App\Services\LandingContent\SiteContentCache;
@@ -10,15 +11,12 @@ use Filament\Resources\Pages\EditRecord;
 
 class EditLandingHome extends EditRecord
 {
+    use HasHeaderSaveAction;
+
     protected static string $resource = LandingHomeResource::class;
 
-    /** @var array{objects: array<string, mixed>, scenarios: array<string, mixed>}|null */
+    /** @var array{objects: array<string, mixed>, scenarios: array<string, mixed>, events: array<string, mixed>}|null */
     protected ?array $catalogSnapshot = null;
-
-    protected function getHeaderActions(): array
-    {
-        return [];
-    }
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
@@ -26,9 +24,10 @@ class EditLandingHome extends EditRecord
 
         $data['content'] = [];
         foreach (LandingContent::locales() as $locale) {
-            $data['content'][$locale] = is_array($translations[$locale] ?? null)
+            $localeData = is_array($translations[$locale] ?? null)
                 ? $translations[$locale]
                 : [];
+            $data['content'][$locale] = self::normalizeHomeLocale($localeData);
         }
 
         $data['images'] = $this->record->images;
@@ -104,7 +103,54 @@ class EditLandingHome extends EditRecord
             }
         }
 
+        $data['catalog_events'] = [];
+        foreach (LandingContent::eventSlugs() as $slug => $_label) {
+            $eventRecord = LandingContent::query()
+                ->where('section_key', 'event.'.$slug)
+                ->first();
+            $data['catalog_events'][$slug] = ['content' => []];
+            foreach (LandingContent::locales() as $locale) {
+                $loc = [];
+                if ($eventRecord) {
+                    $loc = $eventRecord->getTranslation('content', $locale, false) ?? [];
+                    $loc = is_array($loc) ? $loc : [];
+                }
+                $data['catalog_events'][$slug]['content'][$locale] = [
+                    'title' => $loc['title'] ?? '',
+                    'dateText' => $loc['dateText'] ?? '',
+                ];
+            }
+        }
+
         return $data;
+    }
+
+    /**
+     * Перенос устаревших полей первого экрана в hero.*.
+     *
+     * @param  array<string, mixed>  $localeData
+     * @return array<string, mixed>
+     */
+    protected static function normalizeHomeLocale(array $localeData): array
+    {
+        if (! isset($localeData['hero']) || ! is_array($localeData['hero'])) {
+            $localeData['hero'] = [];
+        }
+
+        $hero = $localeData['hero'];
+        if (trim((string) ($hero['title'] ?? '')) === '' && isset($localeData['introTitle'])) {
+            $hero['title'] = $localeData['introTitle'];
+        }
+        if (trim((string) ($hero['lead'] ?? '')) === '' && isset($localeData['introText'])) {
+            $hero['lead'] = $localeData['introText'];
+        }
+        if (trim((string) ($hero['badge'] ?? '')) === '' && isset($localeData['heroBadge'])) {
+            $hero['badge'] = $localeData['heroBadge'];
+        }
+
+        $localeData['hero'] = $hero;
+
+        return $localeData;
     }
 
     protected function mutateFormDataBeforeSave(array $data): array
@@ -112,8 +158,9 @@ class EditLandingHome extends EditRecord
         $this->catalogSnapshot = [
             'objects' => $data['catalog_objects'] ?? [],
             'scenarios' => $data['catalog_scenarios'] ?? [],
+            'events' => $data['catalog_events'] ?? [],
         ];
-        unset($data['catalog_objects'], $data['catalog_scenarios']);
+        unset($data['catalog_objects'], $data['catalog_scenarios'], $data['catalog_events']);
 
         $visible = (bool) ($data['festival_visible'] ?? true);
         unset($data['festival_visible']);
@@ -152,7 +199,7 @@ class EditLandingHome extends EditRecord
     }
 
     /**
-     * @param  array{objects: array<string, mixed>, scenarios: array<string, mixed>}|null  $snapshot
+     * @param  array{objects: array<string, mixed>, scenarios: array<string, mixed>, events: array<string, mixed>}|null  $snapshot
      */
     protected function persistCatalog(?array $snapshot): void
     {
@@ -198,6 +245,30 @@ class EditLandingHome extends EditRecord
                 $localeContent = is_array($localeContent) ? $localeContent : [];
                 unset($localeContent['slug']);
                 $record->setTranslation('content', $locale, $localeContent);
+            }
+            $record->save();
+        }
+
+        foreach (LandingContent::eventSlugs() as $slug => $_label) {
+            $payload = $snapshot['events'][$slug] ?? null;
+            if (! is_array($payload)) {
+                continue;
+            }
+            $record = LandingContent::query()
+                ->where('section_key', 'event.'.$slug)
+                ->first();
+            if (! $record) {
+                continue;
+            }
+            foreach (LandingContent::locales() as $locale) {
+                $localeContent = $payload['content'][$locale] ?? [];
+                $localeContent = is_array($localeContent) ? $localeContent : [];
+                $existing = $record->getTranslation('content', $locale, false) ?? [];
+                $existing = is_array($existing) ? $existing : [];
+                $record->setTranslation('content', $locale, array_merge($existing, [
+                    'title' => $localeContent['title'] ?? $existing['title'] ?? '',
+                    'dateText' => $localeContent['dateText'] ?? $existing['dateText'] ?? '',
+                ]));
             }
             $record->save();
         }

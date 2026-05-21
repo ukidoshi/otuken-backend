@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Storage;
  *                       scenarios_section.
  *   data.objects      — объекты для главной и карточек.
  *   data.scenarios    — сценарии.
- *   data.events       — зарезервировано; не заполняется (пустой массив в ответе).
+ *   data.events       — события (для плашки на первом экране главной).
  *
  * Все строковые поля, пустые после trim(), не возвращаются. Пустые массивы
  * (и сирые объекты) тоже не возвращаются. Это переводит контракт «нет
@@ -31,24 +31,21 @@ class SiteContentCache
 {
     public const TTL_SECONDS = 600;
 
-    /** Поля верхнего уровня записи site_pages.home: SEO и первый экран (Hero). */
+    /** Поля site_pages.home → data.site_pages.home (SEO + FAQ для schema). */
     private const HOME_SEO_KEYS = [
         'title',
         'description',
-        'heroBadge',
-        'introTitle',
-        'introText',
-        'detailText',
-        'relatedLinks',
         'faq',
     ];
 
-    /** Подразделы home (data.home.*) — белый список. */
+    /** Подразделы site_pages.home → data.home.* */
     private const HOME_BLOCK_KEYS = [
+        'hero',
         'about',
         'festival',
         'objects_section',
         'scenarios_section',
+        'cta',
     ];
 
     /** Разрешённые section_key для data.site_pages.{slug}. */
@@ -99,12 +96,15 @@ class SiteContentCache
         $home = [];
         $objects = [];
         $scenarios = [];
+        $events = [];
 
         foreach ($records as $record) {
             $key = $record->section_key;
             $rawLocalized = $record->localized($locale);
 
             if (str_starts_with($key, 'event.')) {
+                $events[] = self::buildSluggedEntry($record, $rawLocalized);
+
                 continue;
             }
 
@@ -180,7 +180,7 @@ class SiteContentCache
             'home' => $home,
             'objects' => $objects,
             'scenarios' => $scenarios,
-            'events' => [],
+            'events' => $events,
         ];
     }
 

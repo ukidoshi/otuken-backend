@@ -1,0 +1,26 @@
+/**
+ * Панель «Сохранить / Отмена» на длинных формах — фиксируется у нижнего края при прокрутке.
+ * Включается через EditRecord::stickyFormActions() (Filament).
+ */
+.fi-page .fi-sc-actions.fi-sticky {
+    position: fixed;
+    bottom: 0;
+    z-index: 40;
+    padding: 0.75rem 1.25rem;
+    background-color: rgb(255 255 255 / 0.96);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgb(229 231 235);
+    box-shadow: 0 -10px 28px rgb(0 0 0 / 0.08);
+}
+
+.dark .fi-page .fi-sc-actions.fi-sticky {
+    background-color: rgb(17 24 39 / 0.96);
+    border-top-color: rgb(55 65 81);
+    box-shadow: 0 -10px 28px rgb(0 0 0 / 0.35);
+}
+
+/* Чтобы последние поля формы не уходили под панель */
+.fi-resource-edit-record-page .fi-main,
+.fi-resource-create-record-page .fi-main {
+    padding-bottom: 4.5rem;
+}

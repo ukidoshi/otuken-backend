@@ -40,6 +40,31 @@ class LandingObjectForm
     }
 
     /**
+     * Поля объекта на главной (карточка + окно «Подробнее»).
+     *
+     * @return array<int, mixed>
+     */
+    public static function homepageLocaleSchema(string $prefix): array
+    {
+        return [
+            TextInput::make("$prefix.title")
+                ->label('Название объекта')
+                ->placeholder('Юрточный городок'),
+            TextInput::make("$prefix.badge")
+                ->label('Короткий код на карточке')
+                ->helperText('Две–три буквы, если нет фото — показываются вместо изображения.'),
+            Textarea::make("$prefix.short")
+                ->label('Краткое описание на карточке')
+                ->rows(2),
+            Textarea::make("$prefix.full")
+                ->label('Полное описание в окне')
+                ->rows(5),
+            LandingFormComponents::stringList("$prefix.tags", 'Теги', 'Например: «Культура»'),
+            LandingFormComponents::stringList("$prefix.points", 'Ключевые функции', 'Один пункт в строке'),
+        ];
+    }
+
+    /**
      * @return array<int, mixed>
      */
     public static function localeSchema(string $prefix, bool $showInternalCode = true): array

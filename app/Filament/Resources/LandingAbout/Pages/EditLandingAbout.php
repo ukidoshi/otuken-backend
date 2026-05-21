@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LandingAbout\Pages;
 
+use App\Filament\Concerns\HasHeaderSaveAction;
 use App\Filament\Resources\LandingAbout\LandingAboutResource;
 use App\Models\LandingContent;
 use App\Services\LandingContent\SiteContentCache;
@@ -10,12 +11,9 @@ use Filament\Resources\Pages\EditRecord;
 
 class EditLandingAbout extends EditRecord
 {
-    protected static string $resource = LandingAboutResource::class;
+    use HasHeaderSaveAction;
 
-    protected function getHeaderActions(): array
-    {
-        return [];
-    }
+    protected static string $resource = LandingAboutResource::class;
 
     protected function mutateFormDataBeforeFill(array $data): array
     {

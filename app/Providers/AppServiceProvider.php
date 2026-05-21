@@ -7,6 +7,8 @@ use App\Models\User;
 use App\Policies\NewsPolicy;
 use App\Policies\UserPolicy;
 use Filament\Events\ServingFilament;
+use Filament\Resources\Pages\CreateRecord;
+use Filament\Resources\Pages\EditRecord;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
@@ -41,6 +43,12 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(ServingFilament::class, function (): void {
             app()->setLocale('ru');
+
+            // «Сохранить» прилипает к низу экрана, когда до него долистали на длинной форме.
+            EditRecord::stickyFormActions();
+            CreateRecord::stickyFormActions();
+            EditRecord::alignFormActionsEnd();
+            CreateRecord::alignFormActionsEnd();
         });
 
         // Чтобы URL файлов (Spatie /storage/…) совпадали с тем, как вы открываете сайт (например :8081 в Docker),
