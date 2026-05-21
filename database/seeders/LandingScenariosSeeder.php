@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\LandingContent;
+use App\Services\LandingContent\LandingContentLocaleSync;
 use Database\Seeders\Data\ScenariosSeedData;
 use Illuminate\Database\Seeder;
 
@@ -45,6 +46,7 @@ class LandingScenariosSeeder extends Seeder
         }
 
         $translations['ru'] = $existingRu;
+        $translations = LandingContentLocaleSync::mirrorIntoTranslations($translations);
 
         $record->section_key = $sectionKey;
         $record->setTranslations('content', $translations);

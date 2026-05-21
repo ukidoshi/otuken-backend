@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\LandingContent;
+use App\Services\LandingContent\LandingContentLocaleSync;
 use Database\Seeders\Data\EventsSeedData;
 use Database\Seeders\Data\ObjectsSeedData;
 use Database\Seeders\Data\SitePagesSeedData;
@@ -36,7 +37,7 @@ class LandingContentsSeeder extends Seeder
      * Идемпотентно дописать RU-локаль для раздела.
      *
      * Правила:
-     *   - tuv/en никогда не трогаем (туда руками заходит редактор);
+     *   - после RU те же тексты копируются в tuv и en (см. LandingContentLocaleSync);
      *   - в ru добавляем только те top-level ключи, которых ещё нет в БД,
      *     ранее заполненные ключи (например, отредактированный title) оставляем
      *     как есть. Так seeder спокойно прогоняется поверх свежей миграции,
@@ -62,6 +63,7 @@ class LandingContentsSeeder extends Seeder
         }
 
         $translations['ru'] = $existingRu;
+        $translations = LandingContentLocaleSync::mirrorIntoTranslations($translations);
 
         $record->section_key = $sectionKey;
         $record->setTranslations('content', $translations);
