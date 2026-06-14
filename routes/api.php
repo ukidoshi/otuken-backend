@@ -1,9 +1,13 @@
 <?php
 
+use App\Http\Controllers\Api\DistrictInterestController;
 use App\Http\Controllers\Api\V1\NewsController;
 use App\Http\Controllers\Api\V1\PreviewNewsController;
 use App\Http\Controllers\Api\V1\SiteContentController;
 use Illuminate\Support\Facades\Route;
+
+Route::post('/leads/district-interest', [DistrictInterestController::class, 'store'])
+    ->middleware('throttle:12,1');
 
 Route::prefix('v1')->group(function (): void {
     Route::get('/news', [NewsController::class, 'index']);
