@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\DistrictInterestRequest;
 use App\Mail\DistrictInterestLeadMail;
+use App\Services\Leads\LeadRecipientList;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -14,10 +15,10 @@ class DistrictInterestController extends Controller
 {
     public function store(DistrictInterestRequest $request): JsonResponse
     {
-        $managerEmail = config('landing.leads_manager_email');
+        $recipients = LeadRecipientList::resolve();
 
-        if (! is_string($managerEmail) || trim($managerEmail) === '') {
-            Log::error('District interest lead: LEADS_MANAGER_EMAIL is not configured');
+        if ($recipients === []) {
+            Log::error('District interest lead: no recipient emails configured');
 
             return response()->json([
                 'error' => 'Сервис временно недоступен. Попробуйте позже или свяжитесь с нами по телефону на сайте.',
@@ -27,7 +28,7 @@ class DistrictInterestController extends Controller
         $data = $request->validated();
 
         try {
-            Mail::to($managerEmail)->send(new DistrictInterestLeadMail(
+            Mail::to($recipients)->send(new DistrictInterestLeadMail(
                 clientName: $data['name'],
                 phone: $data['phone'],
                 districtTitle: $data['districtTitle'],
