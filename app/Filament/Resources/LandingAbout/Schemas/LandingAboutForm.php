@@ -39,8 +39,8 @@ class LandingAboutForm
 
                 LandingFormComponents::imagesGallery(
                     directory: 'landing-about',
-                    title: 'Фото в шапке страницы',
-                    description: 'По желанию. Если пусто — стандартное фото из сайта.',
+                    title: 'Фотографии блока «История идеи «Алантос»»',
+                    description: 'Общие для всех языков. Порядок фото = порядок подписей в блоке «История идеи» (см. вкладки языков). Если пусто — на сайте показываются архивные фото из кода. JPG, PNG или WEBP.',
                 ),
             ]);
     }
@@ -68,7 +68,25 @@ class LandingAboutForm
                 ])
                 ->collapsible(),
 
-            Section::make('2. Блок «Наш подход»')
+            Section::make('2. Блок «История идеи «Алантос»»')
+                ->description('Рассказ о том, как из землячества «Алантос» в Казани выросла идея «Өтүкен». Фотографии — в галерее ниже (общая для всех языков), подписи к ним — в этом блоке.')
+                ->schema([
+                    TextInput::make("$prefix.origin.badge")->label('Подпись над заголовком')->placeholder('История идеи'),
+                    TextInput::make("$prefix.origin.title")->label('Заголовок блока'),
+                    Textarea::make("$prefix.origin.lead")->label('Вводный абзац (крупный)')->rows(3),
+                    LandingFormComponents::stringList("$prefix.origin.paragraphs", 'Абзацы рассказа', 'Один абзац — одна строка'),
+                    Textarea::make("$prefix.origin.quote")->label('Выделенная цитата в конце')->rows(4),
+                    TextInput::make("$prefix.origin.galleryTitle")->label('Заголовок над фотогалереей')->placeholder('Хроника «Алантос» в Казани'),
+                    LandingFormComponents::stringList(
+                        "$prefix.origin.captions",
+                        'Подписи к фотографиям',
+                        'Подпись к фото',
+                        'Каждая подпись соответствует фото из галереи по порядку: 1-я подпись — к 1-му фото и так далее.',
+                    ),
+                ])
+                ->collapsible(),
+
+            Section::make('3. Блок «Наш подход»')
                 ->schema([
                     TextInput::make("$prefix.approach.kicker")->label('Подпись'),
                     TextInput::make("$prefix.approach.title")->label('Заголовок'),
@@ -76,21 +94,21 @@ class LandingAboutForm
                 ])
                 ->collapsible(),
 
-            Section::make('3. Блок «Что для нас принципиально»')
+            Section::make('4. Блок «Что для нас принципиально»')
                 ->schema([
                     TextInput::make("$prefix.principles.kicker")->label('Подпись'),
                     LandingFormComponents::cards("$prefix.principles.cards")->label('Четыре карточки'),
                 ])
                 ->collapsible(),
 
-            Section::make('4. Текстовые разделы')
+            Section::make('5. Текстовые разделы')
                 ->description('Три блока под шапкой — как на странице.')
                 ->schema([
                     LandingFormComponents::sections("$prefix.sections"),
                 ])
                 ->collapsible(),
 
-            Section::make('5. Команда проекта')
+            Section::make('6. Команда проекта')
                 ->schema([
                     TextInput::make("$prefix.team.badge")->label('Подпись над заголовком'),
                     TextInput::make("$prefix.team.title")->label('Заголовок'),
@@ -110,7 +128,7 @@ class LandingAboutForm
                 ])
                 ->collapsible(),
 
-            Section::make('6. Вопросы и ответы')
+            Section::make('7. Вопросы и ответы')
                 ->schema([
                     Textarea::make("$prefix.faqLead")->label('Текст над блоком FAQ')->rows(2),
                     LandingFormComponents::faq("$prefix.faq"),

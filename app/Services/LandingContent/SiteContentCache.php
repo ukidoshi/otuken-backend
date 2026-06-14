@@ -151,7 +151,22 @@ class SiteContentCache
             // === Остальные страницы: whitelist site_pages.* (сейчас только «О нас») ===
             if (isset(self::SITE_PAGE_SECTIONS[$key])) {
                 $cleaned = self::pruneEmpty($rawLocalized);
-                if (is_array($cleaned) && $cleaned !== []) {
+                $cleaned = is_array($cleaned) ? $cleaned : [];
+
+                // Фотографии истории «Алантос» — общие для всех локалей, лежат
+                // в колонке images записи. Подписи к ним берутся из origin.captions
+                // (локализуются), фронт сопоставляет фото и подпись по индексу.
+                if ($key === 'site_pages.about_us') {
+                    $originPhotos = self::imagesPayload($record);
+                    if ($originPhotos !== []) {
+                        $origin = $cleaned['origin'] ?? [];
+                        $origin = is_array($origin) ? $origin : [];
+                        $origin['photos'] = $originPhotos;
+                        $cleaned['origin'] = $origin;
+                    }
+                }
+
+                if ($cleaned !== []) {
                     $sitePages[self::SITE_PAGE_SECTIONS[$key]] = $cleaned;
                 }
 

@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{{ config('app.name') }}</title>
-        <style>
+            <style>
             body {
                 font-family: system-ui, -apple-system, sans-serif;
                 margin: 0;
@@ -36,13 +36,13 @@
             a:hover {
                 text-decoration: underline;
             }
-        </style>
+            </style>
     </head>
     <body>
         <main>
             <h1>{{ config('app.name') }}</h1>
             <p>Бэкенд и админ-панель.</p>
             <a href="{{ url('/admin') }}">Админ-панель</a>
-        </main>
+                    </main>
     </body>
 </html>
