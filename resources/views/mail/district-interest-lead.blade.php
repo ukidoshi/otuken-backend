@@ -1,16 +1,9 @@
-Новая заявка с лендинга «{{ config('app.name') }}»
+Новая заявка с сайта «{{ config('app.name') }}»
 
 Имя: {{ $clientName }}
 Телефон: {{ $phone }}
 
-Район: {{ $districtTitle }}
-@if($districtType)
-Тип: {{ $districtType }}
-@endif
-Код района: {{ $districtId }}
-@if($page)
-Страница: {{ $page }}
-@endif
+Интересующий район: {!! $districtTitle !!};
 
 ---
 Письмо отправлено автоматически с формы «Интерес к району» на карте главной страницы.
